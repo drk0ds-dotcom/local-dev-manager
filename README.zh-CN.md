@@ -16,7 +16,7 @@
 
 ## 快速开始
 
-1. 从 [v1.0.0 发布页](https://github.com/drk0ds-dotcom/local-dev-manager/releases/tag/v1.0.0) 下载 **Local Dev Manager Setup 1.0.0.exe**。本次二进制发布面向 **Windows x64**。
+1. 从 [v1.0.0 发布页](https://github.com/drk0ds-dotcom/local-dev-manager/releases/tag/v1.0.0) 下载 **Local-Dev-Manager-Setup-1.0.0.exe**。本次二进制发布面向 **Windows x64**。
 2. 安装 [Node.js](https://nodejs.org/)，确保 `npm` 位于 `PATH`。如果项目使用其他包管理器，也需要安装相应工具。
 3. 安装并打开应用，点击 **Add Project**。
 4. 选择包含有效 `package.json` 且定义了 `dev` 或 `start` 脚本的文件夹，然后点击 **Start**。
@@ -54,7 +54,7 @@
 由于安装包尚无成熟的可信代码签名信誉，Windows SmartScreen 可能显示警告。警告本身不能证明文件有害，但请勿绕过来自未知来源文件的警告。仅从本仓库的[官方 GitHub Releases](https://github.com/drk0ds-dotcom/local-dev-manager/releases)下载；如需额外校验，可将 SHA-256 与同一发布页的 `SHA256SUMS.txt` 对照：
 
 ```powershell
-Get-FileHash -Algorithm SHA256 '.\Local Dev Manager Setup 1.0.0.exe'
+Get-FileHash -Algorithm SHA256 '.\Local-Dev-Manager-Setup-1.0.0.exe'
 ```
 
 我们不声称安装包已经获得 Microsoft 认证或代码签名。

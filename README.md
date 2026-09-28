@@ -16,7 +16,7 @@ Local Dev Manager is useful when you work on several local projects and want one
 
 ## Quick start
 
-1. Download **Local Dev Manager Setup 1.0.0.exe** from the [v1.0.0 release](https://github.com/drk0ds-dotcom/local-dev-manager/releases/tag/v1.0.0). This binary release is for **Windows x64**.
+1. Download **Local-Dev-Manager-Setup-1.0.0.exe** from the [v1.0.0 release](https://github.com/drk0ds-dotcom/local-dev-manager/releases/tag/v1.0.0). This binary release is for **Windows x64**.
 2. Install [Node.js](https://nodejs.org/) with `npm` available in `PATH`. Other package managers must also be installed if a project uses them.
 3. Run the installer, open Local Dev Manager, and choose **Add Project**.
 4. Select a folder containing a valid `package.json` with a `dev` or `start` script. Select the project and press **Start**.
@@ -54,7 +54,7 @@ Removing a project removes it from the app's list and deletes its saved app log.
 Windows SmartScreen may warn about this release because the installer does not have an established trusted code-signing reputation. A warning alone does not establish that a file is malicious, but do not bypass one for a file from an unknown source. Download only from this repository's [official GitHub Releases](https://github.com/drk0ds-dotcom/local-dev-manager/releases) and, if you want to verify the download, compare its SHA-256 hash against `SHA256SUMS.txt` attached to the same release:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 '.\Local Dev Manager Setup 1.0.0.exe'
+Get-FileHash -Algorithm SHA256 '.\Local-Dev-Manager-Setup-1.0.0.exe'
 ```
 
 The installer is not claimed to be Microsoft certified or code signed.

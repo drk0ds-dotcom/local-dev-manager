@@ -16,7 +16,7 @@
 
 ## البدء السريع
 
-1. نزّل **Local Dev Manager Setup 1.0.0.exe** من [الإصدار v1.0.0](https://github.com/drk0ds-dotcom/local-dev-manager/releases/tag/v1.0.0). النسخة الثنائية المعلنة مخصصة لـ **Windows x64**.
+1. نزّل **Local-Dev-Manager-Setup-1.0.0.exe** من [الإصدار v1.0.0](https://github.com/drk0ds-dotcom/local-dev-manager/releases/tag/v1.0.0). النسخة الثنائية المعلنة مخصصة لـ **Windows x64**.
 2. ثبّت [Node.js](https://nodejs.org/) وتأكد من توفر `npm` في `PATH`. إذا كان مشروعك يستخدم مدير حزم آخر، ثبّته أيضًا.
 3. ثبّت التطبيق، افتحه، واضغط **Add Project / إضافة مشروع**.
 4. اختر مجلدًا يحتوي `package.json` صالحًا وسكريبت `dev` أو `start`، ثم اضغط **Start / تشغيل**.
@@ -54,7 +54,7 @@
 قد يعرض Windows تحذير SmartScreen لأن هذا المثبّت لا يملك سمعة توقيع برمجي موثوقة بعد. التحذير وحده لا يثبت أن الملف ضار، لكن لا تتجاوز تحذيرًا لملف من مصدر مجهول. نزّل المثبّت من [صفحة الإصدارات الرسمية لهذا المستودع](https://github.com/drk0ds-dotcom/local-dev-manager/releases) فقط، ويمكنك مقارنة SHA-256 مع `SHA256SUMS.txt` المرفق بالإصدار نفسه:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 '.\Local Dev Manager Setup 1.0.0.exe'
+Get-FileHash -Algorithm SHA256 '.\Local-Dev-Manager-Setup-1.0.0.exe'
 ```
 
 لا ندّعي أن المثبّت موثق من Microsoft أو موقّع رقميًا.

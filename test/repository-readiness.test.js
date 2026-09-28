@@ -20,7 +20,7 @@ function isIgnored(relativePath) {
 test('publication-only and sensitive local files cannot enter the repository', () => {
   const excludedPaths = [
     'node_modules/example/index.js',
-    'dist/Local Dev Manager Setup 1.0.0.exe',
+    'dist/Local-Dev-Manager-Setup-1.0.0.exe',
     'projects.json',
     '.env.local',
     'certificates/release.pem',

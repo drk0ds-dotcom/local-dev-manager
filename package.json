@@ -30,6 +30,7 @@
   "build": {
     "appId": "com.localdevmanager.app",
     "productName": "Local Dev Manager",
+    "artifactName": "Local-Dev-Manager-Setup-${version}.${ext}",
     "files": [
       "main.js",
       "projectStarter.js",

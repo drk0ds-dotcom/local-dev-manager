@@ -437,8 +437,8 @@ rtk git commit -m "ci: verify Windows builds and repository readiness"
 ### Task 7: التحقق النهائي وبناء أصول الإصدار
 
 **Files:**
-- Generated, ignored: `dist/Local Dev Manager Setup 1.0.0.exe`
-- Generated, ignored: `dist/Local Dev Manager Setup 1.0.0.exe.blockmap`
+- Generated, ignored: `dist/Local-Dev-Manager-Setup-1.0.0.exe`
+- Generated, ignored: `dist/Local-Dev-Manager-Setup-1.0.0.exe.blockmap`
 - Generated, ignored: `dist/latest.yml`
 - Generated, ignored: `dist/SHA256SUMS.txt`
 
@@ -487,7 +487,7 @@ Expected: exit 0 وتوليد `.exe`, `.blockmap`, و`latest.yml`.
 Run:
 
 ```powershell
-rtk proxy powershell -NoProfile -Command '$names=@("Local Dev Manager Setup 1.0.0.exe","Local Dev Manager Setup 1.0.0.exe.blockmap","latest.yml"); $lines=foreach($name in $names){$item=Get-Item -LiteralPath (Join-Path "dist" $name); $hash=(Get-FileHash -Algorithm SHA256 -LiteralPath $item.FullName).Hash.ToLowerInvariant(); "$hash  $name"}; [IO.File]::WriteAllLines((Join-Path (Resolve-Path dist) "SHA256SUMS.txt"),$lines,[Text.UTF8Encoding]::new($false))'
+rtk proxy powershell -NoProfile -Command '$names=@("Local-Dev-Manager-Setup-1.0.0.exe","Local-Dev-Manager-Setup-1.0.0.exe.blockmap","latest.yml"); $lines=foreach($name in $names){$item=Get-Item -LiteralPath (Join-Path "dist" $name); $hash=(Get-FileHash -Algorithm SHA256 -LiteralPath $item.FullName).Hash.ToLowerInvariant(); "$hash  $name"}; [IO.File]::WriteAllLines((Join-Path (Resolve-Path dist) "SHA256SUMS.txt"),$lines,[Text.UTF8Encoding]::new($false))'
 ```
 
 Expected: ثلاثة أسطر بصيغة `<hash>  <filename>` داخل `dist/SHA256SUMS.txt`، ثم يصبح الملف رابع أصل مرفوع في Release.
@@ -578,8 +578,8 @@ Run `gh run list` للحصول على أحدث Run ثم `gh run watch <run-id> -
 **Files:**
 - External create: Git tag `v1.0.0`
 - External create: GitHub Release `v1.0.0`
-- Upload: `dist/Local Dev Manager Setup 1.0.0.exe`
-- Upload: `dist/Local Dev Manager Setup 1.0.0.exe.blockmap`
+- Upload: `dist/Local-Dev-Manager-Setup-1.0.0.exe`
+- Upload: `dist/Local-Dev-Manager-Setup-1.0.0.exe.blockmap`
 - Upload: `dist/latest.yml`
 - Upload: `dist/SHA256SUMS.txt`
 
@@ -618,7 +618,7 @@ Expected: tag يشير إلى HEAD الذي اجتاز CI.
 Run:
 
 ```powershell
-rtk gh release create v1.0.0 "dist/Local Dev Manager Setup 1.0.0.exe" "dist/Local Dev Manager Setup 1.0.0.exe.blockmap" "dist/latest.yml" "dist/SHA256SUMS.txt" --repo drk0ds-dotcom/local-dev-manager --title "Local Dev Manager v1.0.0" --notes-file docs/releases/v1.0.0.md
+rtk gh release create v1.0.0 "dist/Local-Dev-Manager-Setup-1.0.0.exe" "dist/Local-Dev-Manager-Setup-1.0.0.exe.blockmap" "dist/latest.yml" "dist/SHA256SUMS.txt" --repo drk0ds-dotcom/local-dev-manager --title "Local Dev Manager v1.0.0" --notes-file docs/releases/v1.0.0.md
 ```
 
 Expected: Release منشور بأربعة assets بالضبط.

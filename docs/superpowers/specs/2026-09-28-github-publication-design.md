@@ -205,8 +205,8 @@ English | العربية | 简体中文
 ينشأ GitHub Release عام بعلامة `v1.0.0` بعد نجاح التحقق. يتضمن:
 
 ```text
-Local Dev Manager Setup 1.0.0.exe
-Local Dev Manager Setup 1.0.0.exe.blockmap
+Local-Dev-Manager-Setup-1.0.0.exe
+Local-Dev-Manager-Setup-1.0.0.exe.blockmap
 latest.yml
 SHA256SUMS.txt
 ```
