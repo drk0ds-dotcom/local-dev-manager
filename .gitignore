@@ -1,0 +1,21 @@
+node_modules/
+dist/
+out/
+*.log
+
+# Local environment, credentials, and signing material
+.env*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+
+# Local execution and design scratch files
+.superpowers/
+vibe_images/
+assets/icon-original-backup.png
+assets/icon-v1-cleaned.png
+
+# بيانات المستخدم المحلية (تُخزَّن فعليًا في userData)
+projects.json
