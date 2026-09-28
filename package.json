@@ -1,0 +1,65 @@
+{
+  "name": "local-dev-manager",
+  "version": "1.0.0",
+  "description": "A desktop manager for running and monitoring local Node.js development projects.",
+  "author": "Burayk",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/drk0ds-dotcom/local-dev-manager.git"
+  },
+  "homepage": "https://github.com/drk0ds-dotcom/local-dev-manager#readme",
+  "bugs": {
+    "url": "https://github.com/drk0ds-dotcom/local-dev-manager/issues"
+  },
+  "main": "main.js",
+  "scripts": {
+    "test": "node --test",
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^26.15.3"
+  },
+  "dependencies": {
+    "cross-spawn": "^7.0.6",
+    "electron-updater": "^6.8.9",
+    "pidusage": "^3.0.2"
+  },
+  "build": {
+    "appId": "com.localdevmanager.app",
+    "productName": "Local Dev Manager",
+    "files": [
+      "main.js",
+      "projectStarter.js",
+      "processManager.js",
+      "restartPolicy.js",
+      "preload.js",
+      "renderer.js",
+      "index.html",
+      "assets/**",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "drk0ds-dotcom",
+        "repo": "local-dev-manager"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Local Dev Manager"
+    }
+  }
+}
