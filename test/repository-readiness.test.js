@@ -29,6 +29,7 @@ test('publication-only and sensitive local files cannot enter the repository', (
     'vibe_images/mockup.png',
     'assets/icon-original-backup.png',
     'assets/icon-v1-cleaned.png',
+    'assets/icon-v2.png',
     '.superpowers/sdd/progress.md'
   ];
 

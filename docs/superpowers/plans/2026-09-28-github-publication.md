@@ -321,7 +321,7 @@ rtk git commit -m "docs: add Arabic and Simplified Chinese guides"
 
 **Files:**
 - Create: `docs/images/project-running.png`
-- Create: `docs/images/automatic-dependency-install.png`
+- Create: `docs/images/empty-state.png`
 - Create: `docs/images/arabic-interface.png`
 - Modify: `README.md`
 - Modify: `README.ar.md`
@@ -354,7 +354,7 @@ Expected: FAIL بسبب غياب الصور.
 
 - [ ] **Step 3: أنشئ النسخ المنقحة دون تغيير حقيقة الواجهة**
 
-استخدم أداة تحرير الصور المعتمدة لإخفاء `C:\Users\Gamer` وقص الأجزاء المربكة من تحذير مشروع Next.js التجريبي. لا تضف أزرارًا أو حالات أو نصوصًا غير موجودة. احتفظ بالنسخ الأصلية خارج Git ولا تحذفها.
+استخدم أداة تحرير الصور المعتمدة لإخفاء مسار محلي مثل `C:\Users\<username>` وقص الأجزاء المربكة من تحذير مشروع Next.js التجريبي، إذا أمكن ذلك دون تغيير حقيقة الواجهة. لا تضف أزرارًا أو حالات أو نصوصًا غير موجودة. احتفظ بالنسخ الأصلية خارج Git ولا تحذفها.
 
 - [ ] **Step 4: نفّذ فحصًا بصريًا لكل صورة**
 

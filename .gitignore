@@ -16,6 +16,7 @@ out/
 vibe_images/
 assets/icon-original-backup.png
 assets/icon-v1-cleaned.png
+assets/icon-v2.png
 
 # بيانات المستخدم المحلية (تُخزَّن فعليًا في userData)
 projects.json
