@@ -34,7 +34,7 @@
 | مساحة العمل | البحث والتجميع والترتيب بالسحب، وفتح رابط localhost أو مجلد المشروع أو VS Code. |
 | سطح المكتب | واجهة عربية/إنجليزية مع RTL، قائمة صينية النظام، عرض CPU والذاكرة، وفحص تحديثات GitHub Releases في النسخة المثبّتة. |
 
-الصور توثّق تجربة يدوية، وليست نتيجة اختبار آلي. [شاهد الشاشة الأولى](docs/images/empty-state.png) و[الواجهة العربية](docs/images/arabic-interface.png).
+الصور توثّق تجربة يدوية، وليست نتيجة اختبار آلي: [مساحة عمل فارغة](docs/images/empty-state.png)، [مشروع متوقف](docs/images/project-stopped.png)، [مشروع يعمل](docs/images/project-running.png)، [مشروعان يعملان](docs/images/multiple-projects.png)، و[الواجهة العربية](docs/images/arabic-interface.png).
 
 ## طريقة العمل المعتادة
 

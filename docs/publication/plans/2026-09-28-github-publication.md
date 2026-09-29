@@ -8,7 +8,7 @@
 
 **Tech Stack:** Electron 33, Node.js, JavaScript, `node:test`, electron-builder/NSIS, Git, GitHub CLI, GitHub Actions, Markdown.
 
-**Spec:** `docs/superpowers/specs/2026-09-28-github-publication-design.md`
+**Spec:** `docs/publication/specs/2026-09-28-github-publication-design.md`
 
 ## Global Constraints
 
@@ -40,8 +40,8 @@
 **Files:**
 - Modify: `.gitignore`
 - Create: `test/repository-readiness.test.js`
-- Include in first commit: `docs/superpowers/specs/2026-09-28-github-publication-design.md`
-- Include in first commit: `docs/superpowers/plans/2026-09-28-github-publication.md`
+- Include in first commit: `docs/publication/specs/2026-09-28-github-publication-design.md`
+- Include in first commit: `docs/publication/plans/2026-09-28-github-publication.md`
 
 **Interfaces:**
 - Consumes: قواعد النطاق في الـSpec والملفات المحلية الحالية.
@@ -111,7 +111,7 @@ Expected: PASS، وكل المسارات الخمسة تُطبع باعتبار�
 Run:
 
 ```powershell
-rtk git add .gitignore test/repository-readiness.test.js docs/superpowers/specs/2026-09-28-github-publication-design.md docs/superpowers/plans/2026-09-28-github-publication.md
+rtk git add .gitignore test/repository-readiness.test.js docs/publication/specs/2026-09-28-github-publication-design.md docs/publication/plans/2026-09-28-github-publication.md
 rtk git commit -m "chore: establish repository publication boundaries"
 ```
 
