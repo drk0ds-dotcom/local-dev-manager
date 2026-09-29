@@ -34,7 +34,17 @@
 | مساحة العمل | البحث والتجميع والترتيب بالسحب، وفتح رابط localhost أو مجلد المشروع أو VS Code. |
 | سطح المكتب | واجهة عربية/إنجليزية مع RTL، قائمة صينية النظام، عرض CPU والذاكرة، وفحص تحديثات GitHub Releases في النسخة المثبّتة. |
 
-الصور توثّق تجربة يدوية، وليست نتيجة اختبار آلي: [مساحة عمل فارغة](docs/images/empty-state.png)، [مشروع متوقف](docs/images/project-stopped.png)، [مشروع يعمل](docs/images/project-running.png)، [مشروعان يعملان](docs/images/multiple-projects.png)، و[الواجهة العربية](docs/images/arabic-interface.png).
+## صور التطبيق
+
+الصور توثّق تجربة يدوية، وليست نتيجة اختبار آلي. تظهر صورة المشروع العامل أعلى الصفحة؛ اضغط على أي صورة أدناه لفتحها بحجمها الكامل.
+
+| مساحة عمل فارغة | مشروع متوقف |
+| --- | --- |
+| [![مساحة عمل Local Dev Manager فارغة](docs/images/empty-state.png)](docs/images/empty-state.png) | [![مشروع محلي متوقف في Local Dev Manager](docs/images/project-stopped.png)](docs/images/project-stopped.png) |
+
+| مشروعان يعملان | الواجهة العربية |
+| --- | --- |
+| [![مشروعان يعملان في Local Dev Manager](docs/images/multiple-projects.png)](docs/images/multiple-projects.png) | [![واجهة Local Dev Manager بالعربية](docs/images/arabic-interface.png)](docs/images/arabic-interface.png) |
 
 ## طريقة العمل المعتادة
 

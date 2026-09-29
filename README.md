@@ -34,7 +34,17 @@ The app chooses an available port from 3000 when a project is added. It installs
 | Workspace | Search projects, arrange them by drag and drop or group name, and open the local URL, project folder, or VS Code. |
 | Desktop | English and Arabic UI with RTL layout; system tray with show, stop all, and quit; CPU and memory polling for running process trees; packaged-app update checks through GitHub Releases. |
 
-The screenshots show manual use of the application, not automated test results: [empty workspace](docs/images/empty-state.png), [stopped project](docs/images/project-stopped.png), [running project](docs/images/project-running.png), [two running projects](docs/images/multiple-projects.png), and [Arabic interface](docs/images/arabic-interface.png).
+## Screenshots
+
+These screenshots show manual use of the application, not automated test results. The running-project view is shown above; select any image below to open it at full size.
+
+| Empty workspace | Stopped project |
+| --- | --- |
+| [![Empty Local Dev Manager workspace](docs/images/empty-state.png)](docs/images/empty-state.png) | [![Stopped local project in Local Dev Manager](docs/images/project-stopped.png)](docs/images/project-stopped.png) |
+
+| Two running projects | Arabic interface |
+| --- | --- |
+| [![Two running projects in Local Dev Manager](docs/images/multiple-projects.png)](docs/images/multiple-projects.png) | [![Arabic Local Dev Manager interface](docs/images/arabic-interface.png)](docs/images/arabic-interface.png) |
 
 ## Typical workflow
 

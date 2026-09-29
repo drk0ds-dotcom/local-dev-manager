@@ -34,7 +34,17 @@
 | 工作区 | 搜索、分组、拖动排序，打开本地网址、项目文件夹或 VS Code。 |
 | 桌面集成 | 英语和阿拉伯语界面及 RTL 布局；系统托盘；运行进程树的 CPU/内存轮询；已打包应用通过 GitHub Releases 检查更新。 |
 
-截图展示的是人工操作，不代表自动化测试结果：[空白工作区](docs/images/empty-state.png)、[已停止的项目](docs/images/project-stopped.png)、[运行中的项目](docs/images/project-running.png)、[两个运行中的项目](docs/images/multiple-projects.png)和[阿拉伯语界面](docs/images/arabic-interface.png)。
+## 应用截图
+
+截图展示的是人工操作，不代表自动化测试结果。运行中项目的截图位于页面顶部；点击下方图片可查看原图。
+
+| 空白工作区 | 已停止的项目 |
+| --- | --- |
+| [![Local Dev Manager 空白工作区](docs/images/empty-state.png)](docs/images/empty-state.png) | [![Local Dev Manager 中已停止的项目](docs/images/project-stopped.png)](docs/images/project-stopped.png) |
+
+| 两个运行中的项目 | 阿拉伯语界面 |
+| --- | --- |
+| [![Local Dev Manager 中两个运行中的项目](docs/images/multiple-projects.png)](docs/images/multiple-projects.png) | [![Local Dev Manager 阿拉伯语界面](docs/images/arabic-interface.png)](docs/images/arabic-interface.png) |
 
 ## 常见流程
 
