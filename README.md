@@ -39,7 +39,7 @@ The app chooses an available port from 3000 when a project is added. It installs
 
 ## Screenshots
 
-These screenshots show manual use of the application, not automated test results. The running-project view is shown above; select any image below to open it at full size.
+These screenshots were captured from the running application with isolated demo projects; they are not interface mockups. The running-project view is shown above; select any image below to open it at full size.
 
 | Empty workspace                                                                                  | Stopped project                                                                                                   |
 | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
@@ -48,6 +48,10 @@ These screenshots show manual use of the application, not automated test results
 | Two running projects                                                                                                 | Arabic interface                                                                                            |
 | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | [![Two running projects in Local Dev Manager](docs/images/multiple-projects.png)](docs/images/multiple-projects.png) | [![Arabic Local Dev Manager interface](docs/images/arabic-interface.png)](docs/images/arabic-interface.png) |
+
+### Custom command
+
+[![A running background worker using a custom command in Local Dev Manager](docs/images/custom-command.png)](docs/images/custom-command.png)
 
 ## Typical workflow
 
