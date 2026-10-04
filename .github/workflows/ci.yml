@@ -22,16 +22,7 @@ jobs:
         run: npm ci
       - name: Run tests
         run: npm test
-      - name: Check JavaScript syntax
-        shell: pwsh
-        run: |
-          $files = @(
-            'main.js', 'projectStarter.js', 'processManager.js',
-            'restartPolicy.js', 'preload.js', 'renderer.js',
-            'test/processManager.test.js', 'test/projectStarter.test.js',
-            'test/restartPolicy.test.js', 'test/repository-readiness.test.js'
-          )
-          foreach ($file in $files) {
-            node --check $file
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          }
+      - name: Lint JavaScript
+        run: npm run lint
+      - name: Check formatting
+        run: npm run format:check

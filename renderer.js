@@ -3,6 +3,21 @@
 // ──────────────────────────
 const I18N = {
   ar: {
+    configureProject: 'إعداد المشروع',
+    projectMode: 'نوع المشروع',
+    nodeScript: 'أمر Node.js',
+    customCommand: 'أمر مخصص',
+    commandLabel: 'الأمر',
+    optionalPort: 'المنفذ (اختياري للأمر المخصص)',
+    commandWarning: 'تُشغّل الأوامر المخصصة محليًا بصلاحيات حساب Windows الخاص بك. أدخل الأوامر التي تثق بها فقط.',
+    cancel: 'إلغاء',
+    saveProject: 'إضافة المشروع',
+    invalidCommand: 'أدخل أمرًا مخصصًا صالحًا.',
+    invalidPort: 'أدخل منفذًا بين 1 و65535 أو اتركه فارغًا للأمر المخصص.',
+    saveCommand: 'حفظ الأمر',
+    commandNextStart: 'سيُستخدم الأمر الجديد عند التشغيل التالي.',
+    noPortText: 'بلا منفذ',
+    noPortTitle: 'هذا المشروع لا يستخدم منفذًا للشبكة.',
     projects: 'المشاريع',
     addProject: 'إضافة مشروع',
     emptyState: 'اختر مشروعًا أو أضف مشروعًا جديدًا',
@@ -12,7 +27,7 @@ const I18N = {
     open: 'فتح',
     folder: 'مجلد',
     auto: 'تلقائي',
-    consoleOutput: 'Console Output',
+    consoleOutput: 'مخرجات الطرفية',
     clear: 'مسح',
     export: 'تصدير',
     searchPh: 'بحث في السجلات...',
@@ -37,9 +52,30 @@ const I18N = {
     groupPh: 'اسم المجموعة — Enter للحفظ',
     searchProjectsPh: 'بحث في المشاريع...',
     stdinPh: 'إدخال تفاعلي للمشروع — Enter للإرسال',
-    stdinSend: 'إرسال'
+    stdinSend: 'إرسال',
+    closeWindow: 'إغلاق النافذة إلى منطقة الإشعارات',
+    minimizeWindow: 'تصغير النافذة',
+    maximizeWindow: 'تكبير النافذة',
+    switchLanguage: 'Switch to English',
+    statsUnavailable: 'CPU/RAM غير متاح'
   },
   en: {
+    configureProject: 'Configure project',
+    projectMode: 'Project type',
+    nodeScript: 'Node.js script',
+    customCommand: 'Custom command',
+    commandLabel: 'Command',
+    optionalPort: 'Port (optional for custom commands)',
+    commandWarning:
+      "Custom commands run locally with your Windows account's permissions. Only enter commands you trust.",
+    cancel: 'Cancel',
+    saveProject: 'Add project',
+    invalidCommand: 'Enter a valid custom command.',
+    invalidPort: 'Enter a port from 1 to 65535, or leave it blank for a custom command.',
+    saveCommand: 'Save command',
+    commandNextStart: 'Changes take effect on the next start.',
+    noPortText: 'No port',
+    noPortTitle: 'This project has no network port.',
     projects: 'Projects',
     addProject: 'Add Project',
     emptyState: 'Select a project or add a new one',
@@ -74,11 +110,16 @@ const I18N = {
     groupPh: 'Group name — Enter to save',
     searchProjectsPh: 'Search projects...',
     stdinPh: 'Interactive input for the project — Enter to send',
-    stdinSend: 'Send'
+    stdinSend: 'Send',
+    closeWindow: 'Close window to system tray',
+    minimizeWindow: 'Minimize window',
+    maximizeWindow: 'Maximize window',
+    switchLanguage: 'Switch to Arabic',
+    statsUnavailable: 'CPU/RAM unavailable'
   }
 };
 
-let lang = localStorage.getItem('ldm-lang') || 'en'; // الإنجليزية افتراضية
+let lang = localStorage.getItem('ldm-lang') || 'en'; // English by default
 
 function t(key, ...args) {
   const v = I18N[lang][key];
@@ -89,39 +130,45 @@ function applyLang() {
   document.documentElement.lang = lang;
   document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
 
-  // إبلاغ العملية الرئيسية حتى تترجم رسائل اللوقز وقائمة الصينية
+  // Keep main-process log messages and the tray menu in the selected language.
   window.api.setLanguage(lang);
 
-  document.querySelectorAll('[data-i18n]').forEach(el => {
+  document.querySelectorAll('[data-i18n]').forEach((el) => {
     el.textContent = t(el.dataset.i18n);
   });
-  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+  document.querySelectorAll('[data-i18n-title]').forEach((el) => {
     el.title = t(el.dataset.i18nTitle);
   });
-  document.querySelectorAll('[data-i18n-ph]').forEach(el => {
+  document.querySelectorAll('[data-i18n-ph]').forEach((el) => {
     el.placeholder = t(el.dataset.i18nPh);
+  });
+  document.querySelectorAll('[data-i18n-aria]').forEach((el) => {
+    el.setAttribute('aria-label', t(el.dataset.i18nAria));
   });
 
   document.getElementById('lang-btn').textContent = t('langBtn');
-  updateStatusBadge(currentProject ? (projectStatus[currentProject] || 'stopped') : 'stopped');
+  updateStatusBadge(currentProject ? projectStatus[currentProject] || 'stopped' : 'stopped');
   updateAutoStartBtn();
   updateAutoRestartBtn();
+  renderProjectStats();
+  if (currentProject) refreshPortStatus(currentProject);
 }
 
 // ──────────────────────────
 // STATE
 // ──────────────────────────
 let currentProject = null;
-let projects       = {};
-let projectStatus  = {};
-let projectLogs    = {}; // logs per project
-let projectPorts   = {}; // ports per project
-let runningSince   = {}; // بدء التشغيل لكل مشروع
-let logFilter      = '';
-let sidebarFilter  = '';   // بحث القائمة الجانبية
-let draggedId      = null;  // المشروع المسحوب حاليًا في القائمة
+let projects = {};
+let projectStatus = {};
+let projectLogs = {}; // logs per project
+let projectPorts = {}; // ports per project
+let projectResourceStatus = {};
+let runningSince = {}; // Start time for each project
+let logFilter = '';
+let sidebarFilter = ''; // Sidebar search query
+let draggedId = null; // Project currently being dragged in the sidebar
 
-const MAX_LOG_LINES = 500;
+const MAX_LOG_LINES = window.api.logCap;
 
 // ──────────────────────────
 // HELPERS
@@ -131,14 +178,77 @@ function projectName(id) {
 }
 
 function openProject(id) {
-  const resolvedPort = projectPorts[id] || projects[id]?.port;
-  window.api.open(id, resolvedPort);
+  if (id && projects[id]?.port != null) window.api.open(id);
 }
+
+document.getElementById('app-close').addEventListener('click', () => window.api.closeApp());
+document.getElementById('app-minimize').addEventListener('click', () => window.api.minimizeApp());
+document.getElementById('app-maximize').addEventListener('click', () => window.api.maximizeApp());
+document.getElementById('add-project').addEventListener('click', () => window.api.addProject());
+const addDialog = document.getElementById('add-project-dialog');
+const addForm = document.getElementById('new-project-form');
+const addMode = document.getElementById('new-project-mode');
+const addCommand = document.getElementById('new-custom-command');
+const addPort = document.getElementById('new-project-port');
+const addError = document.getElementById('new-project-error');
+let addSelection = null;
+
+function updateAddMode() {
+  const custom = addMode.value === 'custom';
+  document.getElementById('new-command-row').hidden = !custom;
+  document.getElementById('new-project-warning').hidden = !custom;
+  addPort.required = !custom;
+}
+
+addMode.addEventListener('change', () => {
+  addPort.value = addMode.value === 'custom' ? '' : String(addSelection?.suggestedPort ?? '');
+  addError.textContent = '';
+  updateAddMode();
+});
+window.api.onAddProjectSelection((selection) => {
+  addSelection = selection;
+  document.getElementById('new-project-path').textContent = selection.path;
+  addMode.querySelector('option[value="node"]').disabled = !selection.hasNodeScript;
+  addMode.value = selection.hasNodeScript ? 'node' : 'custom';
+  addCommand.value = '';
+  addPort.value = selection.hasNodeScript ? String(selection.suggestedPort ?? '') : '';
+  addError.textContent = '';
+  updateAddMode();
+  addDialog.showModal();
+  (addMode.value === 'custom' ? addCommand : addPort).focus();
+});
+window.api.onAddProjectError((message) => {
+  if (addDialog.open) addError.textContent = message;
+});
+addDialog.addEventListener('close', () => {
+  addSelection = null;
+  window.api.cancelAddProject();
+});
+document.getElementById('new-project-cancel').addEventListener('click', () => addDialog.close());
+addForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  const custom = addMode.value === 'custom';
+  const port = addPort.value.trim() ? Number(addPort.value) : null;
+  if (custom && !addCommand.value.trim()) return void (addError.textContent = t('invalidCommand'));
+  if ((!custom && port === null) || (port !== null && (!Number.isInteger(port) || port < 1 || port > 65535)))
+    return void (addError.textContent = t('invalidPort'));
+  window.api.submitProject({ mode: addMode.value, customCommand: custom ? addCommand.value : undefined, port });
+});
+document.getElementById('project-start').addEventListener('click', () => window.api.start(currentProject));
+document.getElementById('project-stop').addEventListener('click', () => window.api.stop(currentProject));
+document.getElementById('project-restart').addEventListener('click', () => window.api.restart(currentProject));
+document.getElementById('project-open').addEventListener('click', () => openProject(currentProject));
+document.getElementById('project-code').addEventListener('click', () => window.api.openInCode(currentProject));
+document.getElementById('project-folder').addEventListener('click', () => window.api.openFolder(currentProject));
+document.getElementById('autostart-btn').addEventListener('click', () => window.api.toggleAutoStart(currentProject));
+document
+  .getElementById('autorestart-btn')
+  .addEventListener('click', () => window.api.toggleAutoRestart(currentProject));
 
 // ──────────────────────────
 // SIDEBAR
-// بناء بالعناصر بدل innerHTML — أسماء المجلدات مدخل غير موثوق
-// بحث فوري + تجميع حسب المجموعة + سحب وإفلات للترتيب
+// Build DOM nodes instead of injecting untrusted folder names through innerHTML.
+// Support instant search, grouping, and drag-and-drop ordering.
 // ──────────────────────────
 function buildProjectItem(p) {
   const el = document.createElement('div');
@@ -150,20 +260,24 @@ function buildProjectItem(p) {
   const dot = document.createElement('span');
   dot.className = `project-dot ${projectStatus[p.id] || 'stopped'}`;
 
-  const name = document.createElement('span');
-  name.className = 'project-name';
+  const name = document.createElement('button');
+  name.type = 'button';
+  name.className = 'project-name project-select';
   name.textContent = p.name;
+  if (p.id === currentProject) name.setAttribute('aria-current', 'true');
 
   const del = document.createElement('button');
+  del.type = 'button';
   del.className = 'project-delete';
   del.title = t('deleteTitle');
+  del.setAttribute('aria-label', `${t('deleteTitle')}: ${p.name}`);
   del.textContent = '✕';
   del.addEventListener('click', (e) => removeProject(e, p.id));
 
   el.append(dot, name, del);
   el.addEventListener('click', () => selectProject(p.id));
 
-  // سحب وإفلات لترتيب المشاريع
+  // Drag and drop to reorder projects.
   el.addEventListener('dragstart', (e) => {
     draggedId = p.id;
     el.classList.add('dragging');
@@ -180,7 +294,7 @@ function buildProjectItem(p) {
 
     const ids = Object.values(projects)
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-      .map(x => x.id);
+      .map((x) => x.id);
     const from = ids.indexOf(draggedId);
     const to = ids.indexOf(p.id);
     if (from === -1 || to === -1) return;
@@ -188,8 +302,10 @@ function buildProjectItem(p) {
     ids.splice(from, 1);
     ids.splice(to, 0, draggedId);
 
-    // تحديث محلي فوري ثم حفظ في النواة
-    ids.forEach((id, i) => { if (projects[id]) projects[id].order = i; });
+    // Update the sidebar immediately, then persist the new order in main.
+    ids.forEach((id, i) => {
+      if (projects[id]) projects[id].order = i;
+    });
     renderSidebar();
     window.api.reorder(ids);
   });
@@ -203,13 +319,16 @@ function renderSidebar() {
 
   const filter = sidebarFilter.toLowerCase();
   const list = Object.values(projects)
-    .filter(p => !filter ||
-      (p.name || '').toLowerCase().includes(filter) ||
-      (p.path || '').toLowerCase().includes(filter) ||
-      (p.group || '').toLowerCase().includes(filter))
+    .filter(
+      (p) =>
+        !filter ||
+        (p.name || '').toLowerCase().includes(filter) ||
+        (p.path || '').toLowerCase().includes(filter) ||
+        (p.group || '').toLowerCase().includes(filter)
+    )
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
-  // تجميع حسب المجموعة — "بدون مجموعة" أولاً ثم أبجديًا
+  // Put ungrouped projects first, then sort named groups alphabetically.
   const groups = new Map();
   for (const p of list) {
     const g = p.group || '';
@@ -253,19 +372,24 @@ function selectProject(id) {
   document.getElementById('project-view').style.display = 'flex';
 
   document.getElementById('project-title').textContent = projects[id].name;
-  document.getElementById('project-stats').textContent = '';
+  renderProjectStats();
 
   updateMeta(id);
   updateStatusBadge(projectStatus[id] || 'stopped');
   syncPortInput();
+  syncCustomCommand();
   syncGroupInput();
   updateAutoStartBtn();
   updateAutoRestartBtn();
   renderLogs(id);
   refreshPortStatus(id);
 
-  document.querySelectorAll('.project-item').forEach(el => {
-    el.classList.toggle('active', el.dataset.id === id);
+  document.querySelectorAll('.project-item').forEach((el) => {
+    const active = el.dataset.id === id;
+    el.classList.toggle('active', active);
+    const button = el.querySelector('.project-select');
+    if (active) button.setAttribute('aria-current', 'true');
+    else button.removeAttribute('aria-current');
   });
 }
 
@@ -283,7 +407,16 @@ function syncPortInput() {
   const input = document.getElementById('port-input');
   if (input && currentProject) {
     input.value = projects[currentProject]?.port ?? '';
+    document.getElementById('project-open').disabled = projects[currentProject]?.port == null;
   }
+}
+
+function syncCustomCommand() {
+  const command = projects[currentProject]?.customCommand;
+  const row = document.getElementById('custom-command-row');
+  row.hidden = !command;
+  document.getElementById('custom-command-input').value = command ?? '';
+  document.getElementById('custom-command-error').textContent = '';
 }
 
 function updateAutoStartBtn() {
@@ -310,13 +443,28 @@ function updateAutoRestartBtn() {
 }
 
 document.getElementById('port-input').addEventListener('change', (e) => {
-  const port = parseInt(e.target.value, 10);
-  if (!currentProject || !Number.isInteger(port) || port < 1 || port > 65535) {
+  const custom = !!projects[currentProject]?.customCommand;
+  const port = e.target.value.trim() === '' && custom ? null : Number(e.target.value);
+  if (!currentProject || (port !== null && (!Number.isInteger(port) || port < 1 || port > 65535))) {
     syncPortInput();
     return;
   }
+  delete projectPorts[currentProject];
   window.api.updatePort(currentProject, port);
   refreshPortStatus(currentProject);
+});
+
+document.getElementById('custom-command-save').addEventListener('click', () => {
+  if (!currentProject || !projects[currentProject]?.customCommand) return;
+  const command = document.getElementById('custom-command-input').value.trim();
+  const error = document.getElementById('custom-command-error');
+  if (!command || command.length > 2048) return void (error.textContent = t('invalidCommand'));
+  error.textContent = '';
+  window.api.updateCustomCommand(currentProject, command);
+});
+window.api.onProjectSettingsError((message) => {
+  document.getElementById('custom-command-error').textContent = message;
+  syncPortInput();
 });
 
 document.getElementById('group-input').addEventListener('change', (e) => {
@@ -324,13 +472,13 @@ document.getElementById('group-input').addEventListener('change', (e) => {
   window.api.updateGroup(currentProject, e.target.value.trim().slice(0, 40));
 });
 
-// بحث القائمة الجانبية — فلترة فورية بالاسم أو المسار أو المجموعة
+// Filter the sidebar by project name, path, or group as the user types.
 document.getElementById('sidebar-search').addEventListener('input', (e) => {
   sidebarFilter = e.target.value.trim();
   renderSidebar();
 });
 
-// إدخال تفاعلي للمشروع (stdin) — Enter يرسل السطر
+// Send interactive project input to stdin when Enter is pressed.
 const stdinInput = document.getElementById('stdin-input');
 stdinInput.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter') return;
@@ -347,7 +495,7 @@ document.getElementById('stdin-send').addEventListener('click', () => {
 });
 
 // ──────────────────────────
-// PORT STATUS — تنبيه فوري عند اختيار المشروع إذا كان بورت 3000 مشغولاً
+// PORT STATUS — check the selected project's assigned port.
 // ──────────────────────────
 let portCheckSeq = 0;
 
@@ -356,14 +504,21 @@ async function refreshPortStatus(id) {
   if (!el || !projects[id]) return;
 
   const seq = ++portCheckSeq;
+  if (projects[id].port == null) {
+    if (currentProject !== id) return;
+    el.className = 'port-status neutral';
+    el.textContent = t('noPortText');
+    el.title = t('noPortTitle');
+    return;
+  }
   const busy = await window.api.checkPort(projects[id].port);
   const status = projectStatus[id] || 'stopped';
 
-  // تجاهل نتيجة قديمة إذا بدّل المستخدم المشروع سريعًا
+  // Ignore a stale result if the user switched projects during the check.
   if (seq !== portCheckSeq || currentProject !== id) return;
 
-  // المؤشر الواعي بالسياق: البورت مشغول والمشروع يعمل أو يُقلع = خادم المشروع نفسه
-  // (التشغيل لا يُسمح به أصلًا إلا إذا كان البورت حرًا وقتها — فالمشغول الآن خادمنا)
+  // A busy port on a running or booting project belongs to its own server:
+  // launch was allowed only while the assigned port was free.
   if (busy && (status === 'running' || status === 'booting')) {
     el.className = 'port-status own';
     el.textContent = t('portSelfText');
@@ -376,7 +531,7 @@ async function refreshPortStatus(id) {
   el.title = busy ? t('portBusyTitle') : t('portFreeTitle');
 }
 
-// تحديث دوري للمؤشر كل 3 ثوانٍ — يبقى حيًا دائمًا دون أي تفاعل
+// Refresh the port indicator every three seconds without user interaction.
 setInterval(() => {
   if (currentProject) refreshPortStatus(currentProject);
 }, 3000);
@@ -393,6 +548,7 @@ function removeProject(event, id) {
 
   delete projectLogs[id];
   delete projectPorts[id];
+  delete projectResourceStatus[id];
   delete projectStatus[id];
   delete runningSince[id];
 
@@ -408,7 +564,7 @@ function removeProject(event, id) {
 // ──────────────────────────
 function updateStatusBadge(status) {
   const badge = document.getElementById('project-status');
-  const text  = document.getElementById('status-text');
+  const text = document.getElementById('status-text');
 
   badge.className = `status-badge ${status}`;
   text.textContent = t(status) || status;
@@ -422,14 +578,14 @@ function renderLogs(id) {
   box.innerHTML = '';
 
   const lines = projectLogs[id] || [];
-  lines.forEach(item => appendLogLine(item.type, item.message));
+  lines.forEach((item) => appendLogLine(item.type, item.message));
 }
 
 function appendLogLine(type, message) {
   const box = document.getElementById('logs');
   if (!box) return;
 
-  message.split('\n').forEach(line => {
+  message.split('\n').forEach((line) => {
     if (!line.trim()) return;
     if (logFilter && !line.toLowerCase().includes(logFilter)) return;
 
@@ -440,7 +596,7 @@ function appendLogLine(type, message) {
     box.appendChild(document.createElement('br'));
   });
 
-  // حد أقصى لعقد DOM المعروضة (كل سطر = span + br)
+  // Bound the rendered DOM nodes; each log line uses a span and a br.
   const maxNodes = MAX_LOG_LINES * 2;
   while (box.childNodes.length > maxNodes) box.removeChild(box.firstChild);
 
@@ -450,17 +606,20 @@ function appendLogLine(type, message) {
 function clearLogs() {
   if (currentProject) {
     projectLogs[currentProject] = [];
-    window.api.clearLogs(currentProject); // مسح من القرص أيضًا
+    window.api.clearLogs(currentProject); // Also clear the persisted log.
   }
   document.getElementById('logs').innerHTML = '';
 }
 
 function exportLogs() {
   if (!currentProject) return;
-  const lines = (projectLogs[currentProject] || []).map(l => l.message);
+  const lines = (projectLogs[currentProject] || []).map((l) => l.message);
   if (!lines.length) return;
   window.api.exportLogs(currentProject, lines.join('\n'));
 }
+
+document.getElementById('log-export').addEventListener('click', exportLogs);
+document.getElementById('log-clear').addEventListener('click', clearLogs);
 
 document.getElementById('log-search').addEventListener('input', (e) => {
   logFilter = e.target.value.trim().toLowerCase();
@@ -500,10 +659,13 @@ setInterval(() => {
   if (!el) return;
 
   const since = currentProject && runningSince[currentProject];
-  if (!since) { el.textContent = ''; return; }
+  if (!since) {
+    el.textContent = '';
+    return;
+  }
 
   const s = Math.floor((Date.now() - since) / 1000);
-  const pad = n => String(n).padStart(2, '0');
+  const pad = (n) => String(n).padStart(2, '0');
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
 
@@ -520,6 +682,7 @@ window.api.onProjectStatus((data) => {
     runningSince[data.id] ??= Date.now();
   } else {
     delete runningSince[data.id];
+    delete projectPorts[data.id];
   }
 
   const dot = document.querySelector(`.project-item[data-id="${CSS.escape(data.id)}"] .project-dot`);
@@ -530,9 +693,10 @@ window.api.onProjectStatus((data) => {
   if (currentProject === data.id) {
     updateStatusBadge(data.status);
     if (data.status !== 'running') {
-      document.getElementById('project-stats').textContent = '';
+      delete projectResourceStatus[data.id];
+      renderProjectStats();
     }
-    // المؤشر يتحدث فورًا مع كل تغير حالة (تشغيل/إيقاف)
+    // Refresh the port indicator immediately after a status change.
     refreshPortStatus(data.id);
   }
 });
@@ -541,7 +705,7 @@ window.api.onProjectStatus((data) => {
 // IPC: LOGS
 // ──────────────────────────
 window.api.onProjectLog((data) => {
-  // رسائل النظام العامة (إضافة فاشلة، تحذيرات...) تُعرض في المشروع المفتوح حاليًا
+  // Show general system messages in the currently selected project's log.
   if (data.id === '__system__') {
     if (currentProject) appendLogLine(data.type, data.message);
     return;
@@ -550,7 +714,7 @@ window.api.onProjectLog((data) => {
   if (!projectLogs[data.id]) projectLogs[data.id] = [];
   projectLogs[data.id].push({ type: data.type, message: data.message });
 
-  // حد أقصى للوقز المحفوظ في الذاكرة
+  // Keep only the most recent log lines in memory.
   if (projectLogs[data.id].length > MAX_LOG_LINES) {
     projectLogs[data.id].splice(0, projectLogs[data.id].length - MAX_LOG_LINES);
   }
@@ -566,9 +730,6 @@ window.api.onProjectLog((data) => {
 window.api.onProjectPort((data) => {
   projectPorts[data.id] = data.port;
 
-  // أخبر main.js بالبورت عشان يستخدمه في زر فتح
-  window.api.savePort(data.id, data.port);
-
   if (currentProject === data.id) {
     updateMeta(data.id);
   }
@@ -577,13 +738,20 @@ window.api.onProjectPort((data) => {
 // ──────────────────────────
 // IPC: RESOURCE STATS
 // ──────────────────────────
-window.api.onProjectStats((data) => {
-  if (currentProject !== data.id) return;
-
+function renderProjectStats() {
   const el = document.getElementById('project-stats');
-  if (el) {
-    el.textContent = `CPU ${data.cpu.toFixed(1)}% · RAM ${(data.memory / 1048576).toFixed(0)} MB`;
-  }
+  if (!el) return;
+  const data = currentProject && projectResourceStatus[currentProject];
+  el.textContent = !data
+    ? ''
+    : data.available === false
+      ? t('statsUnavailable')
+      : `CPU ${data.cpu.toFixed(1)}% · RAM ${(data.memory / 1048576).toFixed(0)} MB`;
+}
+
+window.api.onProjectStats((data) => {
+  projectResourceStatus[data.id] = data;
+  if (currentProject === data.id) renderProjectStats();
 });
 
 // ──────────────────────────
@@ -592,32 +760,35 @@ window.api.onProjectStats((data) => {
 window.api.onProjectsData((data) => {
   const prevIds = new Set(Object.keys(projects));
   projects = data;
+  if (addDialog.open && addSelection && Object.values(projects).some((project) => project.path === addSelection.path))
+    addDialog.close();
   renderSidebar();
 
-  // المشروع المحدد حُذف
+  // The selected project was removed.
   if (currentProject && !projects[currentProject]) {
     currentProject = null;
     document.getElementById('project-view').style.display = 'none';
     document.getElementById('empty-state').style.display = 'flex';
   }
 
-  // مشروع أُضيف للتو (وليس التحميل الأول) → حدّده مباشرة
-  const added = Object.keys(projects).find(id => !prevIds.has(id));
+  // Select a newly added project, but not during the initial load.
+  const added = Object.keys(projects).find((id) => !prevIds.has(id));
   if (added && prevIds.size > 0) {
     selectProject(added);
     return;
   }
 
-  // تحديد أول مشروع تلقائيًا إذا لم يكن هناك اختيار
+  // Select the first project when nothing is selected yet.
   if (!currentProject) {
     const first = Object.keys(projects)[0];
     if (first) selectProject(first);
     return;
   }
 
-  // مزامنة عناصر التحكم بعد أي تحديث (بورت، تشغيل تلقائي...)
+  // Sync controls after project settings change.
   updateMeta(currentProject);
   syncPortInput();
+  syncCustomCommand();
   syncGroupInput();
   updateAutoStartBtn();
   updateAutoRestartBtn();
@@ -626,12 +797,12 @@ window.api.onProjectsData((data) => {
 
 // ──────────────────────────
 // IPC: LOGS HISTORY
-// السجلات المحفوظة على القرص من الجلسات السابقة — تُدمج ثم يُعاد العرض
+// Merge persisted logs from earlier sessions, then render the selected log.
 // ──────────────────────────
 window.api.onLogsData((data) => {
   for (const [id, entries] of Object.entries(data || {})) {
     if (!Array.isArray(entries)) continue;
-    projectLogs[id] = entries.slice(-MAX_LOG_LINES).map(e => ({ type: e.type, message: e.message }));
+    projectLogs[id] = entries.slice(-MAX_LOG_LINES).map((e) => ({ type: e.type, message: e.message }));
   }
   if (currentProject) renderLogs(currentProject);
 });

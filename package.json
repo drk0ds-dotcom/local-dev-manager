@@ -1,7 +1,7 @@
 {
   "name": "local-dev-manager",
   "version": "1.0.0",
-  "description": "A desktop manager for running and monitoring local Node.js development projects.",
+  "description": "A Windows desktop manager for local Node.js projects and trusted custom commands.",
   "author": "Burayk",
   "license": "MIT",
   "repository": {
@@ -13,18 +13,30 @@
     "url": "https://github.com/drk0ds-dotcom/local-dev-manager/issues"
   },
   "main": "main.js",
+  "engines": {
+    "node": "^22.13.0 || >=24.0.0"
+  },
   "scripts": {
     "test": "node --test",
+    "smoke:electron": "node run-electron-smoke.js",
+    "lint": "eslint .",
+    "format:check": "prettier --check \"*.js\" \"test/*.js\" \"*.json\"",
+    "format": "prettier --write \"*.js\" \"test/*.js\" \"*.json\"",
     "start": "electron .",
     "dist": "electron-builder"
   },
   "devDependencies": {
-    "electron": "^33.0.0",
-    "electron-builder": "^26.15.3"
+    "@eslint/js": "10.0.1",
+    "electron": "44.5.0",
+    "electron-builder": "^26.15.3",
+    "eslint": "10.11.0",
+    "globals": "17.12.0",
+    "prettier": "3.9.9"
   },
   "dependencies": {
     "cross-spawn": "^7.0.6",
     "electron-updater": "^6.8.9",
+    "pidtree": "^0.6.0",
     "pidusage": "^3.0.2"
   },
   "build": {
@@ -36,10 +48,29 @@
       "projectStarter.js",
       "processManager.js",
       "restartPolicy.js",
+      "logConfig.js",
+      "resourceMonitor.js",
+      "resourcePolling.js",
+      "portState.js",
+      "projectStore.js",
+      "projectRegistry.js",
+      "ipcHandlers.js",
+      "codeLauncher.js",
+      "packageManagerAvailability.js",
+      "logPersistence.js",
+      "logService.js",
+      "updaterPolicy.js",
+      "updateController.js",
+      "trayCloseNotice.js",
+      "trayController.js",
+      "resourceReadings.js",
+      "messages.js",
       "preload.js",
       "renderer.js",
       "index.html",
-      "assets/**",
+      "style.css",
+      "assets/icon.png",
+      "assets/fonts/**",
       "package.json"
     ],
     "directories": {

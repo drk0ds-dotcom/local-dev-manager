@@ -1,150 +1,11 @@
-console.log("✅ PROCESS MANAGER LOADED");
-
-const { exec } = require('child_process');
+const { exec, spawn: nativeSpawn } = require('child_process');
 const spawn = require('cross-spawn');
 const net = require('net');
 const fs = require('fs');
 const path = require('path');
 const { createRestartPolicy } = require('./restartPolicy');
+const { formatProcessMessage } = require('./messages');
 
-let processes = {};
-let processStatus = {};
-
-// عمليات أوقفناها عمدًا — نتجاهل أحداث close اللاحقة لها
-const killedIds = new Set();
-
-// سياسة محاولات إعادة التشغيل التلقائي لكل مشروع
-const restartPolicy = createRestartPolicy();
-
-// ======================
-// I18N — رسائل مدير العمليات تتبع لغة الواجهة (الإنجليزية افتراضية)
-// ======================
-let pmLang = 'en';
-
-function setUiLanguage(lang) {
-  if (lang === 'ar' || lang === 'en') pmLang = lang;
-}
-
-const PMMSG = {
-  en: {
-    alreadyRunning: (name) => `⚠️ Project "${name}" is already running`,
-    installing: (pm) => `📦 node_modules missing — running ${pm} install automatically...`,
-    installFailed: (pm, code) => `❌ ${pm} install failed (exit code: ${code})`,
-    installDone: (pm) => `✅ ${pm} install completed — starting the project...`,
-    installError: (pm, err) => `❌ ${pm} install error: ${err}`,
-    notRunning: (name) => `⚠️ Project "${name}" is not running`,
-    restarting: (name) => `🔄 Restarting "${name}"...`,
-    stoppedByUser: (name) => `🔴 Project "${name}" stopped`,
-    stoppedUnexpectedly: (code) => `🔴 Project stopped (exit code: ${code})`,
-    launchError: (err) => `❌ Failed to start the project: ${err}`,
-    autoRestarting: (name) => `🔄 Project "${name}" crashed — auto-restarting...`,
-    autoRestartGaveUp: (name) => `❌ Project "${name}" keeps crashing — auto-restart disabled`
-  },
-  ar: {
-    alreadyRunning: (name) => `⚠️ المشروع "${name}" يعمل بالفعل`,
-    installing: (pm) => `📦 node_modules غير موجود — جاري تشغيل ${pm} install تلقائياً...`,
-    installFailed: (pm, code) => `❌ فشل ${pm} install (exit code: ${code})`,
-    installDone: (pm) => `✅ ${pm} install اكتمل — جاري تشغيل المشروع...`,
-    installError: (pm, err) => `❌ خطأ في ${pm} install: ${err}`,
-    notRunning: (name) => `⚠️ المشروع "${name}" ليس قيد التشغيل`,
-    restarting: (name) => `🔄 جاري إعادة تشغيل "${name}"...`,
-    stoppedByUser: (name) => `🔴 تم إيقاف المشروع "${name}"`,
-    stoppedUnexpectedly: (code) => `🔴 المشروع توقف (exit code: ${code})`,
-    launchError: (err) => `❌ خطأ في تشغيل المشروع: ${err}`,
-    autoRestarting: (name) => `🔄 انهار المشروع "${name}" — جاري إعادة التشغيل تلقائياً...`,
-    autoRestartGaveUp: (name) => `❌ المشروع "${name}" ينهار بشكل متكرر — أُوقف الإعادة التلقائية`
-  }
-};
-
-function pmMsg(key, ...args) {
-  const v = (PMMSG[pmLang] || PMMSG.en)[key];
-  return typeof v === 'function' ? v(...args) : (v ?? key);
-}
-
-// ======================
-// LOG SINK
-// main.js يضخّ sendLog هنا — كل رسالة تمر عبره فتُحفظ على القرص وتصل للواجهة
-// ======================
-let logSink = null;
-
-function setLogSink(fn) {
-  if (typeof fn === 'function') logSink = fn;
-}
-
-function emitLog(win, id, type, message) {
-  if (logSink) { logSink(id, type, message); return; }
-  win?.webContents.send('project-log', { id, type, message });
-}
-
-// ======================
-// PORT CHECKER
-// فحص بالاتصال الفعلي (connect) بدل محاولة الربط (listen):
-// الربط على Windows يمكن أن ينجح زورًا بفضل SO_REUSEADDR حتى مع وجود خادم
-// يستمع على 127.0.0.1 تحديدًا — الاتصال يفحص وجود مستمع حقيقي
-// ======================
-function canConnect(port, host) {
-  return new Promise((resolve) => {
-    const sock = net.connect({ port, host, timeout: 800 });
-    sock.once('connect', () => { sock.destroy(); resolve(true); });
-    sock.once('error', () => resolve(false));
-    sock.once('timeout', () => { sock.destroy(); resolve(false); });
-  });
-}
-
-async function isPortInUse(port) {
-  return (await canConnect(port, '127.0.0.1')) || (await canConnect(port, '::1'));
-}
-
-async function findFreePort(startPort = 3000, exclude = []) {
-  const banned = new Set(exclude);
-  let port = startPort;
-  while (banned.has(port) || await isPortInUse(port)) port++;
-  return port;
-}
-
-// ======================
-// DETECT PACKAGE MANAGER
-// الأولوية: حقل packageManager في package.json ثم ملفات القفل
-// ======================
-function detectPackageManager(projectPath) {
-  try {
-    const pkg = JSON.parse(fs.readFileSync(path.join(projectPath, 'package.json'), 'utf-8'));
-    if (typeof pkg.packageManager === 'string') {
-      const name = pkg.packageManager.split('@')[0];
-      if (['npm', 'pnpm', 'yarn', 'bun'].includes(name)) return name;
-    }
-  } catch {}
-
-  if (fs.existsSync(path.join(projectPath, 'pnpm-lock.yaml'))) return 'pnpm';
-  if (fs.existsSync(path.join(projectPath, 'yarn.lock'))) return 'yarn';
-  if (fs.existsSync(path.join(projectPath, 'bun.lockb')) ||
-      fs.existsSync(path.join(projectPath, 'bun.lock'))) return 'bun';
-  return 'npm';
-}
-
-// ======================
-// DETECT FRAMEWORK
-// يحدد كيفية تمرير البورت: علم --port يعمل مع Vite/Next/Angular فقط
-// ======================
-function detectFramework(projectPath) {
-  try {
-    const pkg = JSON.parse(fs.readFileSync(path.join(projectPath, 'package.json'), 'utf-8'));
-    const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
-    if (deps.next) return 'next';
-    if (deps['react-scripts']) return 'cra';
-    if (deps['@angular/cli'] || deps['@angular/core']) return 'angular';
-    if (deps.vite || deps.nuxt || deps['@nuxt/kit']) return 'vite';
-    return 'generic';
-  } catch {
-    return 'generic';
-  }
-}
-
-// ======================
-// BUILD RUN ARGS
-// npm/pnpm تحتاجان فاصل -- قبل المعاملات؛ yarn/bun يمررانها مباشرة
-// CRA/generic يعتمدان على متغير البيئة PORT فقط
-// ======================
 function buildRunArgs(pm, script, framework, port) {
   const args = ['run', script];
   const supportsPortFlag = framework === 'vite' || framework === 'next' || framework === 'angular';
@@ -156,330 +17,678 @@ function buildRunArgs(pm, script, framework, port) {
   return args;
 }
 
-// ======================
-// SET STATUS
-// ======================
-function setStatus(id, status, win) {
-  processStatus[id] = status;
-  win?.webContents.send('project-status', { id, status });
-}
-
-// ======================
-// EXTRACT PORT
-// ======================
-function extractPort(text) {
-  const patterns = [
-    /Local:\s+https?:\/\/localhost:(\d+)/i,
-    /localhost:(\d+)/i,
-    /127\.0\.0\.1:(\d+)/i,
-    /(?:port|on)\s+:?(\d{4,5})/i,
-    /:(\d{4,5})\//,
-  ];
-  for (const re of patterns) {
-    const m = text.match(re);
-    if (m) return parseInt(m[1]);
-  }
-  return null;
-}
-
-function isPortScanNoise(text) {
-  return /Port \d+ is in use, trying another one/i.test(text);
-}
-
-// ======================
-// KILL PROCESS TREE (cross-platform)
-// ======================
-function killTree(proc, callback) {
-  if (!proc) { callback?.(); return; }
-
-  if (process.platform === 'win32') {
-    exec(`taskkill /pid ${proc.pid} /T /F`, { windowsHide: true }, () => callback?.());
-  } else {
-    // detached جعل العملية قائدة مجموعة — الإشارة السالبة تقتل المجموعة كاملة
-    try { process.kill(-proc.pid, 'SIGKILL'); }
-    catch {
-      try { proc.kill('SIGKILL'); } catch {}
-    }
-    callback?.();
-  }
-}
-
-// ======================
-// START PROJECT
-// تحقق من node_modules أولاً
-// ======================
-function startProject(id, project, win) {
-  if (processes[id]) {
-    emitLog(win, id, 'warn', pmMsg('alreadyRunning', project.name || id));
-    return;
-  }
-
-  // تشغيل يدوي جديد يصفّر محاولات الإعادة التلقائية السابقة
-  restartPolicy.reset(id);
-
-  setStatus(id, 'booting', win);
-
-  const pm = detectPackageManager(project.path);
-  const nodeModulesPath = path.join(project.path, 'node_modules');
-  const needsInstall = !fs.existsSync(nodeModulesPath);
-
-  if (needsInstall) {
-    emitLog(win, id, 'system', pmMsg('installing', pm));
-
-    const installer = spawn(pm, ['install'], {
-      cwd: project.path,
-      env: { ...process.env },
-      windowsHide: true,
-      detached: process.platform !== 'win32'
-    });
-
-    // نتعقب المثبّت أيضًا حتى يمكن إيقافه أو قتله عند خروج التطبيق
-    processes[id] = installer;
-
-    const pipeOutput = (data) => {
-      data.toString().split('\n').forEach(line => {
-        const t = line.trim();
-        if (t) emitLog(win, id, 'log', t);
-      });
+function buildLaunchSpec(project, { packageManager, framework, baseEnv }) {
+  if (project.customCommand) {
+    return {
+      command: project.customCommand,
+      args: [],
+      env: {
+        ...baseEnv,
+        PYTHONUNBUFFERED: '1',
+        ...(Number.isInteger(project.port) && project.port >= 1 && project.port <= 65535
+          ? { PORT: String(project.port) }
+          : {})
+      },
+      shell: true
     };
-
-    installer.stdout.on('data', pipeOutput);
-    installer.stderr.on('data', pipeOutput);
-
-    installer.on('close', (code) => {
-      delete processes[id];
-      if (killedIds.delete(id)) return;
-
-      if (code !== 0) {
-        setStatus(id, 'stopped', win);
-        emitLog(win, id, 'error', pmMsg('installFailed', pm, code));
-        return;
-      }
-      emitLog(win, id, 'system', pmMsg('installDone', pm));
-      launchDevServer(id, project, win);
-    });
-
-    installer.on('error', (err) => {
-      delete processes[id];
-      if (killedIds.delete(id)) return;
-      setStatus(id, 'stopped', win);
-      emitLog(win, id, 'error', pmMsg('installError', pm, err.message));
-    });
-
-    return; // ننتظر installer ينتهي
   }
 
-  // node_modules موجود — شغّل مباشرة
-  launchDevServer(id, project, win);
+  return {
+    command: packageManager,
+    args: buildRunArgs(packageManager, project.script || 'dev', framework, project.port),
+    env: { ...baseEnv, VITE_PORT: String(project.port), PORT: String(project.port) },
+    shell: false
+  };
 }
 
-// ======================
-// LAUNCH DEV SERVER
-// ======================
-function launchDevServer(id, project, win) {
-  const script = project.script || 'dev';
-  const pm = detectPackageManager(project.path);
-  const framework = detectFramework(project.path);
-  const args = buildRunArgs(pm, script, framework, project.port);
-
-  // PORT يُمرَّر دائمًا — CRA والمشاريع العامة تعتمد عليه
-  const env = {
-    ...process.env,
-    VITE_PORT: String(project.port),
-    PORT: String(project.port)
-  };
-
-  emitLog(win, id, 'system', `⚙️ ${pm} ${args.join(' ')}  [${framework}]`);
-
-  const proc = spawn(pm, args, {
-    cwd: project.path,
-    env,
-    windowsHide: true,
-    detached: process.platform !== 'win32'
-  });
-
-  processes[id] = proc;
-  let isRunning = false;
-
-  // سيرفرات هادئة لا تطبع بورتًا بصيغة معروفة:
-  // بعد 10 ثوانٍ بلا كشف وبلا موت تُعتبر شغالة فعلًا
-  const quietFallback = setTimeout(() => {
-    if (!isRunning && processes[id] === proc && proc.exitCode === null) {
-      isRunning = true;
-      // الإقلاع الصامت الناجح يقطع سلسلة الانهيارات السابقة
-      restartPolicy.reset(id);
-      setStatus(id, 'running', win);
+function createProcessManager({
+  spawnProcess = (command, args, options) =>
+    options.shell ? nativeSpawn(command, args, options) : spawn(command, args, options),
+  checkPort = null,
+  killProcessTree = null,
+  scheduleTimeout = setTimeout,
+  clearScheduledTimeout = clearTimeout
+} = {}) {
+  const records = new Map();
+  function recordFor(id) {
+    if (!records.has(id)) {
+      records.set(id, {
+        process: null,
+        kind: null,
+        phase: 'stopped',
+        status: 'stopped',
+        restartTimer: null,
+        generation: 0
+      });
     }
-  }, 10000);
+    return records.get(id);
+  }
 
-  function handleOutput(text, isStderr) {
-    text.split('\n').forEach(line => {
+  // Track process identity so an old close event cannot affect a newer process.
+  const killedProcesses = new Set();
+
+  // Per-project automatic restart policy.
+  const restartPolicy = createRestartPolicy();
+  const stdinObserved = new WeakSet();
+  const stdinFailed = new WeakSet();
+
+  function advanceEpoch(id) {
+    return ++recordFor(id).generation;
+  }
+
+  function cancelPendingRestart(id) {
+    const record = recordFor(id);
+    const timer = record.restartTimer;
+    if (timer) clearScheduledTimeout(timer);
+    record.restartTimer = null;
+  }
+
+  // ======================
+  // Process-manager messages follow the UI language (English by default).
+  // ======================
+  let pmLang = 'en';
+
+  function setUiLanguage(lang) {
+    if (lang === 'ar' || lang === 'en') pmLang = lang;
+  }
+
+  function pmMsg(key, ...args) {
+    return formatProcessMessage(pmLang, key, ...args);
+  }
+
+  // ======================
+  // LOG SINK
+  // main.js injects sendLog so every message reaches both disk and the UI.
+  // ======================
+  let logSink = null;
+  let portSink = null;
+  let statusSink = null;
+
+  function setLogSink(fn) {
+    if (typeof fn === 'function') logSink = fn;
+  }
+
+  function setPortSink(fn) {
+    portSink = typeof fn === 'function' ? fn : null;
+  }
+
+  function setStatusSink(fn) {
+    statusSink = typeof fn === 'function' ? fn : null;
+  }
+
+  function emitLog(win, id, type, message) {
+    if (logSink) {
+      logSink(id, type, message);
+      return;
+    }
+    win?.webContents.send('project-log', { id, type, message });
+  }
+
+  // ======================
+  // PORT CHECKER
+  // Probe by connecting rather than binding: on Windows, SO_REUSEADDR can make
+  // listen succeed even when a server already owns 127.0.0.1.
+  // ======================
+  function canConnect(port, host) {
+    return new Promise((resolve) => {
+      const sock = net.connect({ port, host, timeout: 800 });
+      sock.once('connect', () => {
+        sock.destroy();
+        resolve(true);
+      });
+      sock.once('error', () => resolve(false));
+      sock.once('timeout', () => {
+        sock.destroy();
+        resolve(false);
+      });
+    });
+  }
+
+  async function isPortInUse(port) {
+    return (await canConnect(port, '127.0.0.1')) || (await canConnect(port, '::1'));
+  }
+
+  async function findFreePort(startPort = 3000, exclude = []) {
+    const banned = new Set(exclude);
+    let port = startPort;
+    while (banned.has(port) || (await (checkPort || isPortInUse)(port))) port++;
+    return port;
+  }
+
+  // ======================
+  // DETECT PACKAGE MANAGER
+  // Prefer package.json's packageManager field, then lockfiles.
+  // ======================
+  function detectPackageManager(projectPath) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(path.join(projectPath, 'package.json'), 'utf-8'));
+      if (typeof pkg.packageManager === 'string') {
+        const name = pkg.packageManager.split('@')[0];
+        if (['npm', 'pnpm', 'yarn', 'bun'].includes(name)) return name;
+      }
+    } catch {
+      // A missing or malformed package.json falls back to lockfile detection.
+    }
+
+    if (fs.existsSync(path.join(projectPath, 'pnpm-lock.yaml'))) return 'pnpm';
+    if (fs.existsSync(path.join(projectPath, 'yarn.lock'))) return 'yarn';
+    if (fs.existsSync(path.join(projectPath, 'bun.lockb')) || fs.existsSync(path.join(projectPath, 'bun.lock')))
+      return 'bun';
+    return 'npm';
+  }
+
+  // ======================
+  // DETECT FRAMEWORK
+  // Only Vite, Next, and Angular accept the --port argument here.
+  // ======================
+  function detectFramework(projectPath) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(path.join(projectPath, 'package.json'), 'utf-8'));
+      const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+      if (deps.next) return 'next';
+      if (deps['react-scripts']) return 'cra';
+      if (deps['@angular/cli'] || deps['@angular/core']) return 'angular';
+      if (deps.vite || deps.nuxt || deps['@nuxt/kit']) return 'vite';
+      return 'generic';
+    } catch {
+      return 'generic';
+    }
+  }
+
+  // ======================
+  // BUILD RUN ARGS
+  // npm and pnpm need -- before script arguments; yarn and bun do not.
+  // CRA and generic projects use the PORT environment variable only.
+  // ======================
+  // ======================
+  // SET STATUS
+  // ======================
+  function setStatus(id, status, win) {
+    const record = recordFor(id);
+    record.phase = status;
+    const displayed = status === 'stopping' ? 'stopped' : status === 'backoff' ? 'booting' : status;
+    record.status = displayed;
+    statusSink?.(id, displayed);
+    win?.webContents.send('project-status', { id, status: displayed });
+  }
+
+  // ======================
+  // EXTRACT PORT
+  // ======================
+  function extractPort(text) {
+    for (const rawLine of text.split(/\r?\n/)) {
+      // ANSI escape codes are control characters intentionally removed from process output.
+      // eslint-disable-next-line no-control-regex
+      const line = rawLine.replace(/\x1b\[[0-9;]*m/g, '');
+      if (/\b(?:redis|postgres(?:ql)?|mysql|mongo(?:db)?|database)\b/i.test(line)) continue;
+
+      const local = line.match(/\bLocal:\s+https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]):(\d{1,5})\b/i);
+      if (local && Number(local[1]) >= 1 && Number(local[1]) <= 65535) return Number(local[1]);
+
+      if (!/\b(?:listening|ready|running)\b/i.test(line)) continue;
+      const host = line.match(/\b(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]):(\d{1,5})\b/i);
+      const port = line.match(/\bport\s*[:=]?\s*(\d{1,5})\b/i);
+      const value = Number((host || port)?.[1]);
+      if (value >= 1 && value <= 65535) return value;
+    }
+    return null;
+  }
+
+  function isPortScanNoise(text) {
+    return /Port \d+ is in use, trying another one/i.test(text);
+  }
+
+  function createLineConsumer(onLine) {
+    let pending = '';
+    return {
+      write(chunk) {
+        pending += chunk.toString();
+        let newline;
+        while ((newline = pending.indexOf('\n')) !== -1) {
+          onLine(pending.slice(0, newline).replace(/\r$/, ''));
+          pending = pending.slice(newline + 1);
+        }
+      },
+      flush() {
+        if (pending) onLine(pending.replace(/\r$/, ''));
+        pending = '';
+      }
+    };
+  }
+
+  // ======================
+  // KILL PROCESS TREE (Windows)
+  // ======================
+  function killTree(proc, callback) {
+    if (!proc) {
+      callback?.();
+      return;
+    }
+
+    exec(`taskkill /pid ${proc.pid} /T /F`, { windowsHide: true }, () => {
+      if (proc.exitCode === null) {
+        try {
+          proc.kill('SIGKILL');
+        } catch {
+          // The process may already have exited after taskkill.
+        }
+      }
+      callback?.();
+    });
+  }
+
+  // ======================
+  // START PROJECT
+  // Check node_modules before starting the project.
+  // ======================
+  function startProject(id, project, win) {
+    advanceEpoch(id);
+    cancelPendingRestart(id);
+    if (recordFor(id).process) {
+      emitLog(win, id, 'warn', pmMsg('alreadyRunning', project.name || id));
+      return;
+    }
+
+    // A fresh manual start resets prior automatic restart attempts.
+    restartPolicy.reset(id);
+
+    setStatus(id, 'booting', win);
+
+    if (project.customCommand) {
+      launchDevServer(id, project, win);
+      return;
+    }
+
+    const pm = detectPackageManager(project.path);
+    const nodeModulesPath = path.join(project.path, 'node_modules');
+    const needsInstall = !fs.existsSync(nodeModulesPath);
+
+    if (needsInstall) {
+      emitLog(win, id, 'system', pmMsg('installing', pm));
+
+      const installer = spawnProcess(pm, ['install'], {
+        cwd: project.path,
+        env: { ...process.env },
+        windowsHide: true,
+        detached: false
+      });
+
+      // Track the installer too so Stop and app shutdown can terminate it.
+      recordFor(id).process = installer;
+      recordFor(id).kind = 'installer';
+
+      const stdoutLines = createLineConsumer((line) => {
+        if (line.trim()) emitLog(win, id, 'log', line.trim());
+      });
+      const stderrLines = createLineConsumer((line) => {
+        if (line.trim()) emitLog(win, id, 'log', line.trim());
+      });
+
+      installer.stdout.on('data', (data) => stdoutLines.write(data));
+      installer.stderr.on('data', (data) => stderrLines.write(data));
+
+      installer.on('close', (code) => {
+        stdoutLines.flush();
+        stderrLines.flush();
+        const current = recordFor(id).process === installer;
+        if (current) {
+          recordFor(id).process = null;
+          recordFor(id).kind = null;
+        }
+        const intentional = killedProcesses.delete(installer);
+        if (!current || intentional) return;
+
+        if (code !== 0) {
+          setStatus(id, 'stopped', win);
+          emitLog(win, id, 'error', pmMsg('installFailed', pm, code));
+          return;
+        }
+        emitLog(win, id, 'system', pmMsg('installDone', pm));
+        launchDevServer(id, project, win);
+      });
+
+      installer.on('error', (err) => {
+        const current = recordFor(id).process === installer;
+        if (current) {
+          recordFor(id).process = null;
+          recordFor(id).kind = null;
+        }
+        const intentional = killedProcesses.delete(installer);
+        if (!current || intentional) return;
+        setStatus(id, 'stopped', win);
+        emitLog(win, id, 'error', pmMsg('installError', pm, err.message));
+      });
+
+      return; // Wait for the installer to finish.
+    }
+
+    // Dependencies are present; launch the script directly.
+    launchDevServer(id, project, win);
+  }
+
+  // ======================
+  // LAUNCH DEV SERVER
+  // ======================
+  function launchDevServer(id, project, win) {
+    if (recordFor(id).process || recordFor(id).restartTimer) {
+      emitLog(win, id, 'warn', pmMsg('alreadyRunning', project.name || id));
+      return;
+    }
+    setStatus(id, 'booting', win);
+    const custom = !!project.customCommand;
+    const packageManager = custom ? null : detectPackageManager(project.path);
+    const framework = custom ? null : detectFramework(project.path);
+    const spec = buildLaunchSpec(project, { packageManager, framework, baseEnv: process.env });
+
+    emitLog(
+      win,
+      id,
+      'system',
+      custom ? `⚙️ ${spec.command}  [custom]` : `⚙️ ${spec.command} ${spec.args.join(' ')}  [${framework}]`
+    );
+
+    const proc = spawnProcess(spec.command, spec.args, {
+      cwd: project.path,
+      env: spec.env,
+      shell: spec.shell,
+      windowsHide: true,
+      detached: false
+    });
+
+    recordFor(id).process = proc;
+    recordFor(id).kind = 'server';
+    let isRunning = false;
+    let detectedPort = null;
+    let probing = false;
+
+    // Log text does not prove readiness; a successful port connection does.
+    const readinessProbe =
+      project.port == null
+        ? null
+        : setInterval(async () => {
+            if (isRunning || recordFor(id).process !== proc || proc.exitCode !== null || killedProcesses.has(proc)) {
+              clearInterval(readinessProbe);
+              return;
+            }
+            const port = detectedPort || project.port;
+            if (!Number.isInteger(port) || port < 1 || port > 65535 || probing) return;
+            probing = true;
+            try {
+              if (
+                (await (checkPort || isPortInUse)(port)) &&
+                recordFor(id).process === proc &&
+                proc.exitCode === null &&
+                !killedProcesses.has(proc) &&
+                !isRunning
+              ) {
+                isRunning = true;
+                restartPolicy.reset(id);
+                setStatus(id, 'running', win);
+                portSink?.(id, port);
+                win?.webContents.send('project-port', { id, port });
+                clearInterval(readinessProbe);
+              }
+            } finally {
+              probing = false;
+            }
+          }, 400);
+
+    if (custom && project.port == null) {
+      proc.on('spawn', () => {
+        if (recordFor(id).process !== proc || proc.exitCode !== null || killedProcesses.has(proc) || isRunning) return;
+        isRunning = true;
+        restartPolicy.reset(id);
+        setStatus(id, 'running', win);
+      });
+    }
+
+    function handleOutput(line, isStderr) {
       const trimmed = line.trim();
-      if (!trimmed) return;
-      if (isPortScanNoise(trimmed)) return;
+      if (!trimmed || isPortScanNoise(trimmed)) return;
 
       let type = 'log';
       if (isStderr) {
-        const isRealError = /\b(error|failed|cannot|unexpected)\b/i.test(trimmed)
-          && !/Local:|Network:|VITE|ready|running|listening/i.test(trimmed);
+        const isRealError =
+          /\b(error|failed|cannot|unexpected)\b/i.test(trimmed) &&
+          !/Local:|Network:|VITE|ready|running|listening/i.test(trimmed);
         type = isRealError ? 'error' : 'log';
       }
 
       emitLog(win, id, type, trimmed);
+      if (!isRunning) detectedPort = extractPort(trimmed) || detectedPort;
+    }
+
+    const stdoutLines = createLineConsumer((line) => handleOutput(line, false));
+    const stderrLines = createLineConsumer((line) => handleOutput(line, true));
+    proc.stdout.on('data', (data) => stdoutLines.write(data));
+    proc.stderr.on('data', (data) => stderrLines.write(data));
+
+    proc.on('close', (code) => {
+      stdoutLines.flush();
+      stderrLines.flush();
+      clearInterval(readinessProbe);
+      const current = recordFor(id).process === proc;
+      if (current) {
+        recordFor(id).process = null;
+        recordFor(id).kind = null;
+      }
+      const intentional = killedProcesses.delete(proc);
+      if (!current) return;
+      setStatus(id, 'stopped', win);
+
+      if (intentional) {
+        restartPolicy.reset(id);
+        emitLog(win, id, 'log', pmMsg('stoppedByUser', project.name));
+        return;
+      }
+
+      emitLog(win, id, 'log', pmMsg('stoppedUnexpectedly', code));
+
+      // Auto-restart after a crash, never after an explicit stop.
+      if (project.autoRestart && code !== 0) {
+        const restart = restartPolicy.next(id);
+        if (!restart) {
+          emitLog(win, id, 'error', pmMsg('autoRestartGaveUp', project.name));
+          return;
+        }
+        emitLog(win, id, 'system', pmMsg('autoRestarting', project.name));
+        setStatus(id, 'backoff', win);
+        const expectedEpoch = recordFor(id).generation;
+        const timer = scheduleTimeout(() => {
+          const record = recordFor(id);
+          if (record.restartTimer !== timer || record.generation !== expectedEpoch) return;
+          record.restartTimer = null;
+          launchDevServer(id, project, win);
+        }, restart.delayMs);
+        recordFor(id).restartTimer = timer;
+      }
     });
 
-    if (!isRunning) {
-      const port = extractPort(text);
-      if (port) {
-        isRunning = true;
-        // وصل السيرفر لحالة التشغيل — صفّر محاولات الإعادة التلقائية
-        restartPolicy.reset(id);
-        setStatus(id, 'running', win);
-        win?.webContents.send('project-port', { id, port });
-
-        // autoOpen معطل - زر "فتح" فقط هو المسؤول عن فتح المتصفح
+    proc.on('error', (err) => {
+      clearInterval(readinessProbe);
+      const current = recordFor(id).process === proc;
+      if (current) {
+        recordFor(id).process = null;
+        recordFor(id).kind = null;
       }
-    }
+      killedProcesses.delete(proc);
+      if (!current) return;
+      setStatus(id, 'stopped', win);
+      emitLog(win, id, 'error', pmMsg('launchError', err.message));
+    });
   }
 
-  proc.stdout.on('data', (data) => handleOutput(data.toString(), false));
-  proc.stderr.on('data', (data) => handleOutput(data.toString(), true));
+  // ======================
+  // STOP PROJECT
+  // Call onStopped only after close; a timeout does not prove process exit.
+  // ======================
+  function stopProject(id, project, win, onStopped) {
+    advanceEpoch(id);
+    cancelPendingRestart(id);
+    const proc = recordFor(id).process;
 
-  proc.on('close', (code) => {
-    clearTimeout(quietFallback);
-    delete processes[id];
-    const intentional = killedIds.delete(id);
-    setStatus(id, 'stopped', win);
-
-    if (intentional) {
+    if (!proc) {
+      emitLog(win, id, 'warn', pmMsg('notRunning', project.name));
+      setStatus(id, 'stopped', win);
       restartPolicy.reset(id);
-      emitLog(win, id, 'log', pmMsg('stoppedByUser', project.name));
+      onStopped?.();
       return;
     }
 
-    emitLog(win, id, 'log', pmMsg('stoppedUnexpectedly', code));
-
-    // إعادة التشغيل التلقائي عند الانهيار (لا يشمل التوقف اليدوي)
-    if (project.autoRestart && code !== 0) {
-      const restart = restartPolicy.next(id);
-      if (!restart) {
-        emitLog(win, id, 'error', pmMsg('autoRestartGaveUp', project.name));
-        return;
-      }
-      emitLog(win, id, 'system', pmMsg('autoRestarting', project.name));
-      setTimeout(() => launchDevServer(id, project, win), restart.delayMs);
-    }
-  });
-
-  proc.on('error', (err) => {
-    clearTimeout(quietFallback);
-    delete processes[id];
-    killedIds.delete(id);
-    setStatus(id, 'stopped', win);
-    emitLog(win, id, 'error', pmMsg('launchError', err.message));
-  });
-}
-
-// ======================
-// STOP PROJECT
-// onStopped يُستدعى بعد موت العملية فعليًا (حدث close) أو بعد 3 ثوانٍ كحد أقصى
-// ======================
-function stopProject(id, project, win, onStopped) {
-  const proc = processes[id];
-
-  if (!proc) {
-    emitLog(win, id, 'warn', pmMsg('notRunning', project.name));
-    setStatus(id, 'stopped', win);
+    setStatus(id, 'stopping', win);
+    killedProcesses.add(proc);
     restartPolicy.reset(id);
-    onStopped?.();
-    return;
+
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      onStopped?.();
+    };
+
+    proc.once('close', finish);
+    (killProcessTree || killTree)(proc);
   }
 
-  setStatus(id, 'stopped', win);
-  killedIds.add(id);
-  restartPolicy.reset(id);
+  function forgetProject(id, project, win) {
+    const clearState = () => {
+      const record = recordFor(id);
+      record.phase = 'stopped';
+      record.status = 'stopped';
+      restartPolicy.reset(id);
+    };
+    if (recordFor(id).process) {
+      stopProject(id, project, win, clearState);
+    } else {
+      advanceEpoch(id);
+      cancelPendingRestart(id);
+      clearState();
+    }
+  }
 
-  let finished = false;
-  const finish = () => {
-    if (finished) return;
-    finished = true;
-    onStopped?.();
+  // ======================
+  // RESTART PROJECT
+  // ======================
+  function restartProject(id, project, win) {
+    emitLog(win, id, 'log', pmMsg('restarting', project.name));
+
+    const expectedEpoch = recordFor(id).generation + 1;
+    stopProject(id, project, win, () => {
+      if (recordFor(id).generation !== expectedEpoch) return;
+      // Allow the OS a brief interval to release the port after process exit.
+      setStatus(id, 'booting', win);
+      const timer = scheduleTimeout(() => {
+        const record = recordFor(id);
+        if (record.restartTimer !== timer || record.generation !== expectedEpoch) return;
+        record.restartTimer = null;
+        launchDevServer(id, project, win);
+      }, 300);
+      recordFor(id).restartTimer = timer;
+    });
+  }
+
+  // ======================
+  // Stop every child during app shutdown.
+  // ======================
+  function hasRunningProcesses() {
+    return [...records.values()].some((record) => !!record.process || !!record.restartTimer);
+  }
+
+  function stopAllProjects() {
+    for (const [id, record] of records) {
+      if (!record.process && !record.restartTimer) continue;
+      advanceEpoch(id);
+      cancelPendingRestart(id);
+      setStatus(id, 'stopped');
+    }
+    const running = [];
+    for (const record of records.values()) {
+      const proc = record.process;
+      if (!proc) continue;
+      running.push(proc);
+      killedProcesses.add(proc);
+      record.process = null;
+      record.kind = null;
+    }
+
+    return Promise.all(
+      running.map(
+        (proc) =>
+          new Promise((resolve) => {
+            (killProcessTree || killTree)(proc, resolve);
+            scheduleTimeout(resolve, 3000);
+          })
+      )
+    );
+  }
+
+  function getStatus(id) {
+    return records.get(id)?.status || 'stopped';
+  }
+
+  function getPhase(id) {
+    return records.get(id)?.phase || 'stopped';
+  }
+
+  // ======================
+  // WRITE TO STDIN
+  // Forward interactive input to projects that prompt while running.
+  // ======================
+  function writeStdin(id, line) {
+    const proc = recordFor(id).process;
+    if (!proc || !proc.stdin || !proc.stdin.writable || stdinFailed.has(proc.stdin)) return false;
+    if (!stdinObserved.has(proc.stdin)) {
+      stdinObserved.add(proc.stdin);
+      proc.stdin.on('error', (err) => {
+        stdinFailed.add(proc.stdin);
+        emitLog(null, id, 'error', pmMsg('stdinError', err.message));
+      });
+    }
+    try {
+      proc.stdin.write(line + '\n');
+      return true;
+    } catch (err) {
+      stdinFailed.add(proc.stdin);
+      emitLog(null, id, 'error', pmMsg('stdinError', err.message));
+      return false;
+    }
+  }
+
+  // Expose running PIDs for resource monitoring in main.js.
+  function getRunningPids() {
+    const out = {};
+    for (const [id, record] of records) {
+      const proc = record.process;
+      if (proc && proc.pid) out[id] = proc.pid;
+    }
+    return out;
+  }
+
+  return {
+    startProject,
+    launchDevServer,
+    stopProject,
+    forgetProject,
+    restartProject,
+    stopAllProjects,
+    hasRunningProcesses,
+    getStatus,
+    getPhase,
+    getRunningPids,
+    findFreePort,
+    isPortInUse,
+    detectPackageManager,
+    detectFramework,
+    buildRunArgs,
+    killTree,
+    extractPort,
+    setUiLanguage,
+    writeStdin,
+    setLogSink,
+    setPortSink,
+    setStatusSink,
+    cancelPendingRestart
   };
-
-  proc.once('close', finish);
-  killTree(proc);
-  setTimeout(finish, 3000);
 }
 
-// ======================
-// RESTART PROJECT
-// ======================
-function restartProject(id, project, win) {
-  emitLog(win, id, 'log', pmMsg('restarting', project.name));
-
-  stopProject(id, project, win, () => {
-    // مهلة قصيرة لضمان تحرر البورت من نظام التشغيل بعد موت العملية
-    setTimeout(() => launchDevServer(id, project, win), 300);
-  });
-}
-
-// ======================
-// STOP ALL (عند إغلاق التطبيق)
-// ======================
-function hasRunningProcesses() {
-  return Object.keys(processes).length > 0;
-}
-
-function stopAllProjects() {
-  const running = Object.values(processes);
-  for (const id of Object.keys(processes)) killedIds.add(id);
-  processes = {};
-
-  return Promise.all(running.map(proc => new Promise(resolve => {
-    killTree(proc, resolve);
-    setTimeout(resolve, 3000);
-  })));
-}
-
-function getStatus(id) {
-  return processStatus[id] || 'stopped';
-}
-
-// ======================
-// WRITE TO STDIN
-// إرسال سطر إدخال تفاعلي للعملية — مشاريع فيها أسئلة أثناء التشغيل
-// ======================
-function writeStdin(id, line) {
-  const proc = processes[id];
-  if (!proc || !proc.stdin || !proc.stdin.writable) return false;
-  try {
-    proc.stdin.write(line + '\n');
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// معرفات العمليات الشغالة — لمراقبة الموارد من main
-function getRunningPids() {
-  const out = {};
-  for (const [id, proc] of Object.entries(processes)) {
-    if (proc && proc.pid) out[id] = proc.pid;
-  }
-  return out;
-}
-
-module.exports = {
-  startProject,
-  stopProject,
-  restartProject,
-  stopAllProjects,
-  hasRunningProcesses,
-  getStatus,
-  getRunningPids,
-  findFreePort,
-  isPortInUse,
-  setUiLanguage,
-  writeStdin,
-  setLogSink
-};
+module.exports = { createProcessManager, buildLaunchSpec };

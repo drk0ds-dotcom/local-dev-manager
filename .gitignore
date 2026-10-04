@@ -1,5 +1,7 @@
 node_modules/
 dist/
+dist-refactor/
+dist-custom-command/
 out/
 *.log
 
@@ -13,10 +15,14 @@ out/
 
 # Local execution and design scratch files
 .superpowers/
+docs/custom-command-implementation-plan.md
+docs/custom-command-design.md
+docs/architecture-refactor-design.md
 vibe_images/
 assets/icon-original-backup.png
 assets/icon-v1-cleaned.png
 assets/icon-v2.png
 
-# بيانات المستخدم المحلية (تُخزَّن فعليًا في userData)
+# Local user data (the installed app stores this under userData)
 projects.json
+project.md

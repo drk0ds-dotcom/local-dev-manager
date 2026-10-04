@@ -1,18 +1,19 @@
 async function startProjectWithChecks({
   id,
   project,
-  npmAvailable,
+  packageManager,
+  isPackageManagerAvailable,
   status,
   win,
   isPortInUse,
   startProject,
   sendLog,
-  npmUnavailableMessage,
+  packageManagerUnavailableMessage,
   portBusyMessage
 }) {
-  if (!npmAvailable) {
-    sendLog(id, 'error', npmUnavailableMessage);
-    return 'npm-unavailable';
+  if (!project.customCommand && !(await isPackageManagerAvailable(packageManager))) {
+    sendLog(id, 'error', packageManagerUnavailableMessage(packageManager));
+    return 'package-manager-unavailable';
   }
 
   if (status !== 'stopped') {
@@ -20,7 +21,7 @@ async function startProjectWithChecks({
     return 'already-running';
   }
 
-  if (await isPortInUse(project.port)) {
+  if (project.port != null && (await isPortInUse(project.port))) {
     sendLog(id, 'error', portBusyMessage(project.port));
     return 'port-busy';
   }

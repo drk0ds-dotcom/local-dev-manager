@@ -11,3 +11,5 @@ Please use GitHub's **Report a vulnerability** option on this repository's Secur
 Include the affected version, reproducible steps, impact, and a small sanitized example. The maintainer will review reports as availability permits; no fixed response or remediation time is promised.
 
 Local Dev Manager runs scripts from folders selected by the user. Treat project dependencies and scripts as executable code, and only add projects from sources you trust.
+
+The current Windows installer is not code-signed. The packaged app checks GitHub Releases for updates but requests consent before downloading and before installing; it does not silently install an update on quit. Verify the release page and published SHA-256 checksum before running any installer, and do not treat a SmartScreen warning as proof that a download is safe.

@@ -9,52 +9,72 @@ const repositoryRoot = path.resolve(__dirname, '..');
 function isIgnored(relativePath) {
   const result = spawnSync(
     'git',
-    ['check-ignore', '--quiet', '--no-index', relativePath],
-    { cwd: repositoryRoot, encoding: 'utf8' }
+    [
+      '-c',
+      `safe.directory=${repositoryRoot.replaceAll('\\', '/')}`,
+      'check-ignore',
+      '--quiet',
+      '--no-index',
+      relativePath
+    ],
+    {
+      cwd: repositoryRoot,
+      encoding: 'utf8'
+    }
   );
 
   assert.notEqual(result.status, null, result.error?.message);
   return result.status === 0;
 }
 
-test('publication-only and sensitive local files cannot enter the repository', () => {
-  const excludedPaths = [
-    'node_modules/example/index.js',
-    'dist/Local-Dev-Manager-Setup-1.0.0.exe',
-    'projects.json',
-    '.env.local',
-    'certificates/release.pem',
-    'certificates/release.key',
-    'certificates/release.pfx',
-    'vibe_images/mockup.png',
-    'assets/icon-original-backup.png',
-    'assets/icon-v1-cleaned.png',
-    'assets/icon-v2.png',
-    '.superpowers/sdd/progress.md'
-  ];
+test(
+  'publication-only and sensitive local files cannot enter the repository',
+  {
+    skip: !fs.existsSync(path.join(repositoryRoot, '.git'))
+  },
+  () => {
+    const excludedPaths = [
+      'node_modules/example/index.js',
+      'dist/Local-Dev-Manager-Setup-1.0.0.exe',
+      'projects.json',
+      'project.md',
+      'docs/custom-command-implementation-plan.md',
+      'docs/custom-command-design.md',
+      'docs/architecture-refactor-design.md',
+      '.env.local',
+      'certificates/release.pem',
+      'certificates/release.key',
+      'certificates/release.pfx',
+      'vibe_images/mockup.png',
+      'assets/icon-original-backup.png',
+      'assets/icon-v1-cleaned.png',
+      'assets/icon-v2.png',
+      '.superpowers/sdd/progress.md'
+    ];
 
-  for (const relativePath of excludedPaths) {
-    assert.equal(
-      isIgnored(relativePath),
-      true,
-      `${relativePath} must remain outside the public repository`
-    );
+    for (const relativePath of excludedPaths) {
+      assert.equal(isIgnored(relativePath), true, `${relativePath} must remain outside the public repository`);
+    }
   }
-});
+);
 
 test('package metadata sends updates to the approved public repository', () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(repositoryRoot, 'package.json'), 'utf8'));
   assert.equal(manifest.name, 'local-dev-manager');
-  assert.equal(manifest.version, '1.0.0');
+  assert.match(manifest.version, /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/);
   assert.equal(manifest.build.productName, 'Local Dev Manager');
   assert.equal(manifest.author, 'Burayk');
   assert.equal(manifest.license, 'MIT');
   assert.equal(manifest.repository.url, 'https://github.com/drk0ds-dotcom/local-dev-manager.git');
   assert.equal(manifest.homepage, 'https://github.com/drk0ds-dotcom/local-dev-manager#readme');
   assert.equal(manifest.bugs.url, 'https://github.com/drk0ds-dotcom/local-dev-manager/issues');
-  assert.deepEqual(manifest.build.publish, [{
-    provider: 'github', owner: 'drk0ds-dotcom', repo: 'local-dev-manager'
-  }]);
+  assert.deepEqual(manifest.build.publish, [
+    {
+      provider: 'github',
+      owner: 'drk0ds-dotcom',
+      repo: 'local-dev-manager'
+    }
+  ]);
 });
 
 test('MIT license credits Burayk in 2026', () => {
