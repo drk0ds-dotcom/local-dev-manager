@@ -37,6 +37,8 @@ const I18N = {
     autoOff: 'تفعيل التشغيل التلقائي مع إقلاع التطبيق',
     running: 'يعمل',
     stopped: 'متوقف',
+    stopping: 'جارٍ الإيقاف...',
+    'stop-failed': 'تعذّر الإيقاف',
     booting: 'جارٍ الإقلاع...',
     langBtn: 'EN',
     confirmDelete: (n) => `حذف المشروع "${n}" من القائمة؟`,
@@ -95,6 +97,8 @@ const I18N = {
     autoOff: 'Start automatically with the app',
     running: 'Running',
     stopped: 'Stopped',
+    stopping: 'Stopping...',
+    'stop-failed': 'Stop failed',
     booting: 'Booting...',
     langBtn: 'ع',
     confirmDelete: (n) => `Remove project "${n}" from the list?`,
@@ -160,6 +164,7 @@ function applyLang() {
 let currentProject = null;
 let projects = {};
 let projectStatus = {};
+let projectBadgeText = {};
 let projectLogs = {}; // logs per project
 let projectPorts = {}; // ports per project
 let projectResourceStatus = {};
@@ -567,7 +572,7 @@ function updateStatusBadge(status) {
   const text = document.getElementById('status-text');
 
   badge.className = `status-badge ${status}`;
-  text.textContent = t(status) || status;
+  text.textContent = (status === 'booting' && projectBadgeText[currentProject]?.[lang]) || t(status) || status;
 }
 
 // ──────────────────────────
@@ -677,6 +682,7 @@ setInterval(() => {
 // ──────────────────────────
 window.api.onProjectStatus((data) => {
   projectStatus[data.id] = data.status;
+  projectBadgeText[data.id] = data.badgeText || null;
 
   if (data.status === 'running') {
     runningSince[data.id] ??= Date.now();

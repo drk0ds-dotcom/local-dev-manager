@@ -5,6 +5,59 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { EventEmitter } = require('node:events');
 const net = require('node:net');
+const os = require('node:os');
+const { createProcessManager } = require('../processManager');
+
+test(
+  'a real custom server announces a different port and becomes Running only after TCP is ready',
+  { timeout: 15000 },
+  async (t) => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ldm-mismatch-server-'));
+    const manager = createProcessManager();
+    t.after(async () => {
+      await manager.stopAllProjects();
+      fs.rmSync(directory, { recursive: true, force: true });
+    });
+    fs.writeFileSync(
+      path.join(directory, 'server.js'),
+      [
+        "const http = require('node:http');",
+        'const port = Number(process.argv[2]);',
+        "const server = http.createServer((_req, res) => res.end('MISMATCH_OK'));",
+        "server.listen(port, '127.0.0.1', () => console.log(`Server started on ${port}`));",
+        'setTimeout(() => server.close(), 3000).unref();'
+      ].join('\n')
+    );
+    const configuredPort = await manager.findFreePort(48000);
+    const actualPort = await manager.findFreePort(configuredPort + 1);
+    assert.notEqual(configuredPort, actualPort);
+    const confirmed = [];
+    const logs = [];
+    manager.setPortSink((_id, port) => confirmed.push(port));
+    manager.setLogSink((_id, _type, message) => logs.push(message));
+    const project = {
+      id: 'mismatch',
+      name: 'Mismatch',
+      path: directory,
+      port: configuredPort,
+      customCommand: `"${process.execPath}" server.js ${actualPort}`
+    };
+
+    manager.startProject(project.id, project);
+    assert.equal(manager.getStatus(project.id), 'booting');
+    const deadline = Date.now() + 8000;
+    while (manager.getStatus(project.id) !== 'running' && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    assert.equal(manager.getStatus(project.id), 'running', logs.join(' | '));
+    assert.deepEqual(confirmed, [actualPort]);
+    assert.equal(await (await fetch(`http://127.0.0.1:${actualPort}/`)).text(), 'MISMATCH_OK');
+    while (manager.getStatus(project.id) !== 'stopped' && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    assert.equal(manager.getStatus(project.id), 'stopped', logs.join(' | '));
+  }
+);
 
 test('Stop cannot become Running again while the child is awaiting close', { timeout: 3000 }, async (t) => {
   const server = net.createServer();
@@ -55,7 +108,7 @@ test('Stop cannot become Running again while the child is awaiting close', { tim
   manager.launchDevServer(project.id, project);
   manager.stopProject(project.id, project);
   await new Promise((resolve) => setTimeout(resolve, 650));
-  assert.equal(manager.getStatus(project.id), 'stopped');
+  assert.equal(manager.getStatus(project.id), 'stopping');
 });
 
 test('an asynchronous stdin failure is reported and prevents further input', (t) => {
@@ -209,9 +262,11 @@ test('Stop All leaves an interrupted dependency installer stopped', async () => 
   };
   manager.startProject(project.id, project);
   assert.equal(manager.getStatus(project.id), 'booting');
-  await manager.stopAllProjects();
+  const shutdown = manager.stopAllProjects();
+  assert.equal(manager.getStatus(project.id), 'stopping');
   installer.exitCode = 1;
   installer.emit('close', 1);
+  await shutdown;
   assert.equal(manager.getStatus(project.id), 'stopped');
 });
 
@@ -338,10 +393,11 @@ test('Restart does not launch a replacement until the old process closes', { tim
   manager.restartProject(project.id, project);
   await new Promise((resolve) => setTimeout(resolve, 3500));
   assert.equal(processes.length, 1);
-  assert.equal(manager.getStatus(project.id), 'stopped');
-  await manager.stopAllProjects();
+  assert.equal(manager.getStatus(project.id), 'stop-failed');
+  const shutdown = manager.stopAllProjects();
   processes[0].exitCode = 0;
   processes[0].emit('close', 0);
+  await shutdown;
   await new Promise((resolve) => setTimeout(resolve, 500));
   assert.equal(processes.length, 1, 'Stop All must cancel a restart waiting for close');
 });
@@ -398,10 +454,12 @@ test('a late close from an old process cannot erase the newer process', { timeou
 
   manager.launchDevServer(project.id, project);
   const old = children[0];
-  await manager.stopAllProjects();
+  const shutdown = manager.stopAllProjects();
+  old.exitCode = 0;
+  old.emit('close', 0);
+  await shutdown;
   manager.launchDevServer(project.id, project);
   const newer = children[1];
-  old.exitCode = 0;
   old.emit('close', 0);
   assert.equal(manager.getRunningPids()[project.id], newer.pid);
   assert.equal(manager.getStatus(project.id), 'booting');

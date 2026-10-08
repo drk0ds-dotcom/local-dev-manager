@@ -99,7 +99,7 @@ function createWindow() {
     if (registry.loadIssue()) {
       dialog.showErrorBox(
         msg('projectsLoadTitle'),
-        msg('projectsLoadFailed', registry.loadIssue().backupPath, registry.path())
+        msg('projectsLoadFailed', registry.loadIssue().backupPath, registry.path(), registry.loadIssue().error?.message)
       );
     }
 
