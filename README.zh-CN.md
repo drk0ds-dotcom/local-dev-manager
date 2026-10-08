@@ -14,11 +14,11 @@
 
 如果你同时开发多个本地项目，可以在一个界面中启动、停止、查看输出、管理端口并打开开发服务器。应用运行 Node.js 项目自身的 `dev` 或 `start` 脚本，也可以运行其他本地项目的可信自定义命令；它不是托管服务，也不替代运行环境或包管理器。
 
-**修订版 v1.0.0 安装包：**当前下载文件同时支持 Node.js 项目和可信自定义命令。如果你已安装较早的 `1.0.0` 构建，请下载修订版并手动重新安装；应用内更新器不会把相同版本号的不同构建识别为新版本。`v1.0.0` 标签和 GitHub 自动生成的源码压缩包仍对应最初的发布版本；修订版源码位于 `main` 分支。
+**v1.0.1 修复版本：**本版本改进进程停止状态、服务器就绪检测以及无效项目数据的保护，同时保留可信自定义命令。1.0.1 是独立于 1.0.0 的新版本；不会移动旧的 `v1.0.0` 源码标签。
 
 ## 快速开始
 
-1. 从 [v1.0.0 发布页](https://github.com/drk0ds-dotcom/local-dev-manager/releases/tag/v1.0.0) 下载 **Local-Dev-Manager-Setup-1.0.0.exe**。本次二进制发布面向 **Windows x64**。
+1. 从 [v1.0.1 发布页](https://github.com/drk0ds-dotcom/local-dev-manager/releases/tag/v1.0.1) 下载 **Local-Dev-Manager-Setup-1.0.1.exe**。本次二进制发布面向 **Windows x64**。
 2. 对于 Node.js 项目，请安装 [Node.js](https://nodejs.org/) 并确保 `npm` 位于 `PATH`。如果项目需要其他包管理器或运行环境，也请单独安装。
 3. 安装并打开应用，点击 **Add Project**。
 4. 对于 Node.js 项目，选择包含有效 `package.json` 且定义了 `dev` 或 `start` 脚本的文件夹。对于其他本地项目，选择 **Custom command** 并输入可信命令。确认设置后点击 **Start**。
@@ -75,7 +75,7 @@
 由于安装包尚无成熟的可信代码签名信誉，Windows SmartScreen 可能显示警告。警告本身不能证明文件有害，但请勿绕过来自未知来源文件的警告。仅从本仓库的[官方 GitHub Releases](https://github.com/drk0ds-dotcom/local-dev-manager/releases)下载；如需额外校验，可将 SHA-256 与同一发布页的 `SHA256SUMS.txt` 对照：
 
 ```powershell
-Get-FileHash -Algorithm SHA256 '.\Local-Dev-Manager-Setup-1.0.0.exe'
+Get-FileHash -Algorithm SHA256 '.\Local-Dev-Manager-Setup-1.0.1.exe'
 ```
 
 我们不声称安装包已经获得 Microsoft 认证或代码签名。
@@ -111,9 +111,9 @@ npm start
 
 ## 已知限制
 
-- 已发布安装包和自动化验证针对 Windows x64；v1.0.0 尚未验证 macOS 或 Linux 安装包。
+- 安装包和自动化验证针对 Windows x64；v1.0.1 尚未验证 macOS 或 Linux 安装包。
 - 应用界面提供英语和阿拉伯语；简体中文仅用于此文档。
-- 修订版 `v1.0.0` 安装包支持自定义命令。Python 3.14 工作进程、Flask、Uvicorn、HTTP 服务以及真实 Go HTTP 服务已在本地验证。Go 测试使用临时便携版运行时，没有在系统中安装 Go。较早安装的同版本构建需要手动重新安装。
+- 本版本支持自定义命令。Python 3.14 工作进程、Flask、Uvicorn、HTTP 服务以及真实 Go HTTP 服务已在本地验证。Go 测试使用临时便携版运行时，没有在系统中安装 Go。只有在新版本发布后，现有 1.0.0 安装才应更新到 1.0.1。
 - 指定端口能否生效取决于项目脚本或框架是否读取 `--port`、`PORT` 或 `VITE_PORT`。
 - 自动安装依赖及项目脚本会执行本地代码，运行前请检查项目内容。
 

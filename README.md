@@ -14,11 +14,11 @@ Run and monitor local Node.js projects and trusted custom commands from one Wind
 
 Local Dev Manager is useful when you work on several local projects and want one place to start them, see their output, manage ports, and open their development servers. It runs each Node.js project's own `dev` or `start` script, or a custom command you enter for another local project. It is not a hosting service or a replacement for a project's runtime or package manager.
 
-**Revised v1.0.0 installer:** The download now includes trusted custom commands as well as Node.js projects. If you installed the earlier v1.0.0 build, download and run the revised installer manually: the in-app updater does not recognize a different build with the same version number as a new update. The v1.0.0 tag and GitHub-generated source archives still refer to the original release; the revised source is on the `main` branch.
+**v1.0.1 patch release:** This version improves process-stop reporting, readiness detection, and recovery when saved project data is invalid. It retains trusted custom commands. Version 1.0.1 is a separate release from 1.0.0; the earlier `v1.0.0` source tag is not being moved.
 
 ## Quick start
 
-1. Download **Local-Dev-Manager-Setup-1.0.0.exe** from the [v1.0.0 release](https://github.com/drk0ds-dotcom/local-dev-manager/releases/tag/v1.0.0). This binary release is for **Windows x64**.
+1. Download **Local-Dev-Manager-Setup-1.0.1.exe** from the [v1.0.1 release](https://github.com/drk0ds-dotcom/local-dev-manager/releases/tag/v1.0.1). This binary release is for **Windows x64**.
 2. For Node.js projects, install [Node.js](https://nodejs.org/) with `npm` available in `PATH`. Install another package manager or runtime separately if your project needs it.
 3. Run the installer, open Local Dev Manager, and choose **Add Project**.
 4. For a Node.js project, select a folder containing a valid `package.json` with a `dev` or `start` script. For another local project, select **Custom command** and enter a trusted command. Confirm the settings, then press **Start**.
@@ -75,7 +75,7 @@ Choose **Add Project** and select a local folder. Choose **Custom command**, ent
 Windows SmartScreen may warn about this release because the installer does not have an established trusted code-signing reputation. A warning alone does not establish that a file is malicious, but do not bypass one for a file from an unknown source. Download only from this repository's [official GitHub Releases](https://github.com/drk0ds-dotcom/local-dev-manager/releases) and, if you want to verify the download, compare its SHA-256 hash against `SHA256SUMS.txt` attached to the same release:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 '.\Local-Dev-Manager-Setup-1.0.0.exe'
+Get-FileHash -Algorithm SHA256 '.\Local-Dev-Manager-Setup-1.0.1.exe'
 ```
 
 The installer is not claimed to be Microsoft certified or code signed.
@@ -117,9 +117,9 @@ The Windows CI workflow runs dependency installation, tests, ESLint linting, and
 
 ## Known limitations
 
-- The published installer and automated verification target Windows x64. macOS and Linux builds are not verified for v1.0.0.
+- The installer and automated verification target Windows x64. macOS and Linux builds are not verified for v1.0.1.
 - The app UI is English/Arabic. Simplified Chinese is available for this README only.
-- The revised v1.0.0 installer includes custom commands. Python 3.14 worker, Flask, Uvicorn, and HTTP-server flows, plus a Go HTTP server, were tested locally; Go used a temporary portable runtime rather than a system installation. Earlier v1.0.0 installations require a manual reinstall to receive this revision.
+- Custom commands are included. Python 3.14 worker, Flask, Uvicorn, HTTP-server, and Go HTTP-server flows were tested locally; Go used a temporary portable runtime rather than a system installation. An existing v1.0.0 installation should update to v1.0.1 only after that release is published.
 - Port forwarding depends on the framework or script honoring `--port`, `PORT`, or `VITE_PORT`; a custom script may ignore them.
 - Automatic dependency installation and project scripts run local code from the selected project. Review a project's scripts and dependencies before starting it.
 

@@ -1,6 +1,6 @@
 {
   "name": "local-dev-manager",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A Windows desktop manager for local Node.js projects and trusted custom commands.",
   "author": "Burayk",
   "license": "MIT",
