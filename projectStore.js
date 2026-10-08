@@ -1,6 +1,12 @@
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 
+function backupProjectData(file, fileSystem = fs) {
+  const backupPath = `${file}.corrupt-${Date.now()}-${crypto.randomUUID()}`;
+  fileSystem.copyFileSync(file, backupPath, fs.constants.COPYFILE_EXCL);
+  return backupPath;
+}
+
 function readProjectData(file, fileSystem = fs) {
   if (!fileSystem.existsSync(file)) {
     return { projects: {}, writable: true, backupPath: null, error: null };
@@ -13,9 +19,8 @@ function readProjectData(file, fileSystem = fs) {
     }
     return { projects, writable: true, backupPath: null, error: null };
   } catch (error) {
-    const backupPath = `${file}.corrupt-${Date.now()}-${crypto.randomUUID()}`;
     try {
-      fileSystem.copyFileSync(file, backupPath, fs.constants.COPYFILE_EXCL);
+      const backupPath = backupProjectData(file, fileSystem);
       return { projects: {}, writable: false, backupPath, error };
     } catch (backupError) {
       return { projects: {}, writable: false, backupPath: null, error, backupError };
@@ -45,4 +50,4 @@ function applyProjectChange(current, mutate, persist) {
   return next;
 }
 
-module.exports = { readProjectData, writeProjectData, applyProjectChange };
+module.exports = { readProjectData, writeProjectData, applyProjectChange, backupProjectData };
