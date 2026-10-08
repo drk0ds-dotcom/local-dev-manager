@@ -38,7 +38,7 @@ function fixture(t) {
   const dialog = {
     showOpenDialog: async () => ({ canceled: true }),
     showSaveDialog: async () => ({ canceled: true }),
-    showErrorBox: () => {}
+    showErrorBox: (...args) => events.push(['error-box', ...args])
   };
   const dispose = registerIpcHandlers({
     ipcMain,
@@ -126,6 +126,28 @@ test('canceling an add-project selection writes nothing', async (t) => {
   assert.equal(f.registry.get('new-id'), undefined);
 });
 
+test('Add Project displays a native error if storage is read-only before a form exists', async (t) => {
+  const f = fixture(t);
+  const file = path.join(f.directory, 'projects.json');
+  fs.writeFileSync(file, '{invalid');
+  f.registry.load();
+  assert.deepEqual(f.registry.snapshot(), {});
+  assert.equal(f.registry.isWritable(), false);
+  let opened = false;
+  f.dialog.showOpenDialog = async () => {
+    opened = true;
+    return { canceled: true };
+  };
+
+  await f.emit('add-project');
+
+  assert.equal(opened, false);
+  assert.deepEqual(
+    f.events.filter((item) => item[0] === 'error-box'),
+    [['error-box', 'projectsLoadTitle', 'projectsReadOnly']]
+  );
+});
+
 test('custom add rejects invalid command, port, duplicate folder and forged path', async (t) => {
   const f = fixture(t);
   const folder = path.join(f.directory, 'worker');
@@ -146,6 +168,10 @@ test('custom add rejects invalid command, port, duplicate folder and forged path
 
   f.dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f.directory] });
   await f.emit('add-project');
+  assert.deepEqual(
+    f.events.filter((item) => item[0] === 'error-box'),
+    [['error-box', 'addProjectTitle', 'alreadyExists']]
+  );
   f.emit('create-project', { mode: 'custom', customCommand: 'python worker.py', port: null });
   assert.equal(f.registry.get('new-id'), undefined);
 });

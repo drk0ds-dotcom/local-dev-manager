@@ -87,7 +87,7 @@ function registerIpcHandlers({
     const revision = ++selectionRevision;
     pendingSelection = null;
     if (!registry.isWritable()) {
-      addError('projectsReadOnly');
+      dialog.showErrorBox(msg('projectsLoadTitle'), msg('projectsReadOnly'));
       return;
     }
     const result = await dialog.showOpenDialog(getWindow(), {
@@ -98,7 +98,7 @@ function registerIpcHandlers({
     const folderPath = path.resolve(result.filePaths[0]);
     const projectName = path.basename(folderPath);
     if (duplicateFolder(folderPath)) {
-      addError('alreadyExists', projectName);
+      dialog.showErrorBox(msg('addProjectTitle'), msg('alreadyExists', projectName));
       return;
     }
     const script = readNodeScript(folderPath);
