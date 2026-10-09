@@ -550,18 +550,6 @@ function removeProject(event, id) {
   if (!confirm(t('confirmDelete', projectName(id)))) return;
 
   window.api.remove(id);
-
-  delete projectLogs[id];
-  delete projectPorts[id];
-  delete projectResourceStatus[id];
-  delete projectStatus[id];
-  delete runningSince[id];
-
-  if (currentProject === id) {
-    currentProject = null;
-    document.getElementById('project-view').style.display = 'none';
-    document.getElementById('empty-state').style.display = 'flex';
-  }
 }
 
 // ──────────────────────────
@@ -766,6 +754,15 @@ window.api.onProjectStats((data) => {
 window.api.onProjectsData((data) => {
   const prevIds = new Set(Object.keys(projects));
   projects = data;
+  for (const id of prevIds) {
+    if (projects[id]) continue;
+    delete projectLogs[id];
+    delete projectPorts[id];
+    delete projectResourceStatus[id];
+    delete projectStatus[id];
+    delete projectBadgeText[id];
+    delete runningSince[id];
+  }
   if (addDialog.open && addSelection && Object.values(projects).some((project) => project.path === addSelection.path))
     addDialog.close();
   renderSidebar();
