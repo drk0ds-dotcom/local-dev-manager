@@ -178,16 +178,18 @@ function registerIpcHandlers({
   on('remove-project', (event, id) => {
     if (!known(id)) return;
     const project = registry.get(id);
-    if (
-      !commit((next) => {
-        delete next[id];
-      })
-    )
-      return;
-    manager.forgetProject(id, project, getWindow());
-    ports.delete(id);
-    logs.remove(id).catch((error) => console.error('Failed to remove project log:', error.message));
-    sendProjects();
+    manager.forgetProject(id, project, getWindow(), (stopped) => {
+      if (!stopped || !known(id)) return;
+      if (
+        !commit((next) => {
+          delete next[id];
+        })
+      )
+        return;
+      ports.delete(id);
+      logs.remove(id).catch((error) => console.error('Failed to remove project log:', error.message));
+      sendProjects();
+    });
   });
 
   on('update-port', (event, payload) => {

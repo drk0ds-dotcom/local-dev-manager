@@ -613,19 +613,24 @@ function createProcessManager({
     }
   }
 
-  function forgetProject(id, project, win) {
-    const clearState = () => {
+  function forgetProject(id, project, win, onForgot) {
+    const clearState = (stopped) => {
+      if (!stopped) {
+        onForgot?.(false);
+        return;
+      }
       const record = recordFor(id);
       record.phase = 'stopped';
       record.status = 'stopped';
       restartPolicy.reset(id);
+      onForgot?.(true);
     };
     if (recordFor(id).process) {
       stopProject(id, project, win, clearState);
     } else {
       advanceEpoch(id);
       cancelPendingRestart(id);
-      clearState();
+      clearState(true);
     }
   }
 

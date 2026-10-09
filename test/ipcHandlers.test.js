@@ -40,18 +40,19 @@ function fixture(t) {
     showSaveDialog: async () => ({ canceled: true }),
     showErrorBox: (...args) => events.push(['error-box', ...args])
   };
+  const manager = {
+    getStatus: () => 'running',
+    stopProject: () => {},
+    restartProject: (id) => events.push(['restart', id]),
+    forgetProject: (_id, _project, _win, done) => done?.(true),
+    writeStdin: () => true
+  };
   const dispose = registerIpcHandlers({
     ipcMain,
     getWindow: () => win,
     registry,
     logs,
-    manager: {
-      getStatus: () => 'running',
-      stopProject: () => {},
-      restartProject: (id) => events.push(['restart', id]),
-      forgetProject: () => {},
-      writeStdin: () => true
-    },
+    manager,
     tray: { refreshLanguage: () => {} },
     ports: { get: (id) => ports.get(id), set: (id, value) => ports.set(id, value), delete: (id) => ports.delete(id) },
     shell: { openExternal: (url) => browser.push(url), openPath: () => {} },
@@ -72,8 +73,53 @@ function fixture(t) {
     logCap: 500
   });
   const emit = (channel, payload) => listeners.get(channel)?.({}, payload);
-  return { directory, registry, listeners, handlers, events, ports, browser, dialog, availability, emit, dispose };
+  return {
+    directory,
+    registry,
+    listeners,
+    handlers,
+    events,
+    ports,
+    browser,
+    dialog,
+    availability,
+    manager,
+    logs,
+    emit,
+    dispose
+  };
 }
+
+test('remove retains a running project and its log until stop is confirmed', (t) => {
+  const f = fixture(t);
+  const callbacks = [];
+  let removedLogs = 0;
+  f.manager.forgetProject = (_id, _project, _win, done) => callbacks.push(done);
+  f.logs.remove = async () => {
+    removedLogs++;
+  };
+  f.ports.set('one', 3000);
+
+  f.emit('remove-project', 'one');
+  assert.equal(callbacks.length, 1);
+  assert.ok(f.registry.get('one'));
+  assert.ok(JSON.parse(fs.readFileSync(path.join(f.directory, 'projects.json'), 'utf8')).one);
+  assert.equal(f.ports.get('one'), 3000);
+  assert.equal(removedLogs, 0);
+
+  callbacks[0](false);
+  assert.ok(f.registry.get('one'));
+  assert.equal(f.ports.get('one'), 3000);
+  assert.equal(removedLogs, 0);
+
+  f.emit('remove-project', 'one');
+  assert.equal(callbacks.length, 2);
+  callbacks[1](true);
+  assert.equal(f.registry.get('one'), undefined);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(f.directory, 'projects.json'), 'utf8')).one, undefined);
+  assert.equal(f.ports.get('one'), undefined);
+  assert.equal(removedLogs, 1);
+});
 
 test('IPC adds a Node project and removes it from the persisted registry', async (t) => {
   const f = fixture(t);

@@ -31,6 +31,39 @@ function waitForStatus(manager, id, expected, timeoutMs = 1500) {
   });
 }
 
+test('forgetProject reports failed stop without clearing the live process state', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ldm-forget-failure-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const child = fakeChild();
+  child.pid = 44001;
+  child.kill = () => false;
+  const timers = [];
+  const manager = createProcessManager({
+    spawnProcess: () => child,
+    killProcessTree: (_proc, done) => done(new Error('taskkill exited 1')),
+    scheduleTimeout: (callback, delay) => {
+      const timer = { callback, delay };
+      timers.push(timer);
+      return timer;
+    },
+    clearScheduledTimeout: () => {}
+  });
+  const project = { id: 'worker', name: 'Worker', path: directory, port: null, customCommand: 'node worker.js' };
+  manager.startProject('worker', project);
+  child.emit('spawn');
+  let stopped;
+  manager.forgetProject('worker', project, null, (result) => {
+    stopped = result;
+  });
+  assert.equal(manager.getStatus('worker'), 'stopping');
+  timers.find((timer) => timer.delay === 3000).callback();
+  assert.equal(stopped, false);
+  assert.equal(manager.getStatus('worker'), 'stop-failed');
+  assert.equal(manager.hasRunningProcesses(), true);
+  child.exitCode = 0;
+  child.emit('close', 0);
+});
+
 test('a portless custom child starts without npm and is running only while alive', async (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ldm-custom-worker-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
