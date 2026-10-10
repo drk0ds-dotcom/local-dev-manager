@@ -21,7 +21,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Run fast tests
-        run: npm test
+        run: npm test -- --test-concurrency=1
       - name: Lint JavaScript
         run: npm run lint
       - name: Check formatting
@@ -69,5 +69,5 @@ jobs:
           $env:LDM_PNPM_INTEGRATION = '1'
           $env:LDM_YARN_BIN_DIR = Join-Path $env:RUNNER_TEMP 'ldm-ci-tools\node_modules\.bin'
           $env:LDM_BUN_BIN_DIR = Split-Path (Get-Command bun).Source
-          node --test --test-reporter=tap | node scripts/assert-ci-test-results.cjs
+          node --test --test-concurrency=1 --test-reporter=tap | node scripts/assert-ci-test-results.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
