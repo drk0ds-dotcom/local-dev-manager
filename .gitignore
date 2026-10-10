@@ -2,8 +2,7 @@ node_modules/
 dist/
 dist-refactor/
 dist-custom-command/
-dist-1.0.1-local/
-dist-verify-20261006/
+dist-*/
 out/
 *.log
 
