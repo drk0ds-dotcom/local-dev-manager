@@ -1,7 +1,20 @@
 const fs = require('node:fs');
 const crypto = require('node:crypto');
+const path = require('node:path');
 
 function backupProjectData(file, fileSystem = fs) {
+  const original = fileSystem.readFileSync(file);
+  const directory = path.dirname(file);
+  const prefix = `${path.basename(file)}.corrupt-`;
+  for (const name of fileSystem.readdirSync(directory)) {
+    if (!name.startsWith(prefix)) continue;
+    const existingPath = path.join(directory, name);
+    try {
+      if (original.equals(fileSystem.readFileSync(existingPath))) return existingPath;
+    } catch {
+      // An unreadable old copy cannot prove this content is already backed up.
+    }
+  }
   const backupPath = `${file}.corrupt-${Date.now()}-${crypto.randomUUID()}`;
   fileSystem.copyFileSync(file, backupPath, fs.constants.COPYFILE_EXCL);
   return backupPath;
