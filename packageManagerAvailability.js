@@ -20,7 +20,7 @@ function isPackageManagerAvailable(name, spawnCommand = spawn) {
     const timer = setTimeout(() => {
       child.kill?.();
       finish(false);
-    }, 5000);
+    }, 15000);
     child.once('error', () => finish(false));
     child.once('close', (code) => finish(code === 0));
   });
