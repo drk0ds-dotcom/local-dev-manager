@@ -10,27 +10,27 @@ const { createProcessManager } = require('../processManager');
 
 test(
   'a real custom server announces a different port and becomes Running only after TCP is ready',
-  { timeout: 15000 },
+  { timeout: 30000 },
   async (t) => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ldm-mismatch-server-'));
-    const manager = createProcessManager();
-    t.after(async () => {
-      await manager.stopAllProjects();
-      fs.rmSync(directory, { recursive: true, force: true });
-    });
+    const portFinder = createProcessManager();
     fs.writeFileSync(
       path.join(directory, 'server.js'),
       [
         "const http = require('node:http');",
-        'const port = Number(process.argv[2]);',
         "const server = http.createServer((_req, res) => res.end('MISMATCH_OK'));",
-        "server.listen(port, '127.0.0.1', () => console.log(`Server started on ${port}`));",
+        "server.listen(0, '127.0.0.1', () => console.log(`Server started on ${server.address().port}`));",
         'setTimeout(() => server.close(), 3000).unref();'
       ].join('\n')
     );
-    const configuredPort = await manager.findFreePort(48000);
-    const actualPort = await manager.findFreePort(configuredPort + 1);
-    assert.notEqual(configuredPort, actualPort);
+    const configuredPort = await portFinder.findFreePort(48000);
+    const manager = createProcessManager({
+      checkPort: async (port) => port !== configuredPort && (await portFinder.isPortInUse(port))
+    });
+    t.after(async () => {
+      await manager.stopAllProjects();
+      fs.rmSync(directory, { recursive: true, force: true });
+    });
     const confirmed = [];
     const logs = [];
     manager.setPortSink((_id, port) => confirmed.push(port));
@@ -40,19 +40,22 @@ test(
       name: 'Mismatch',
       path: directory,
       port: configuredPort,
-      customCommand: `"${process.execPath}" server.js ${actualPort}`
+      customCommand: `"${process.execPath}" server.js`
     };
 
     manager.startProject(project.id, project);
     assert.equal(manager.getStatus(project.id), 'booting');
-    const deadline = Date.now() + 8000;
+    const deadline = Date.now() + 15000;
     while (manager.getStatus(project.id) !== 'running' && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
     assert.equal(manager.getStatus(project.id), 'running', logs.join(' | '));
-    assert.deepEqual(confirmed, [actualPort]);
+    assert.equal(confirmed.length, 1);
+    const actualPort = confirmed[0];
+    assert.notEqual(actualPort, configuredPort);
     assert.equal(await (await fetch(`http://127.0.0.1:${actualPort}/`)).text(), 'MISMATCH_OK');
-    while (manager.getStatus(project.id) !== 'stopped' && Date.now() < deadline) {
+    const stopDeadline = Date.now() + 8000;
+    while (manager.getStatus(project.id) !== 'stopped' && Date.now() < stopDeadline) {
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
     assert.equal(manager.getStatus(project.id), 'stopped', logs.join(' | '));

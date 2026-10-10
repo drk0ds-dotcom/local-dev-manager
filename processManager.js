@@ -233,7 +233,9 @@ function createProcessManager({
       const local = line.match(/\bLocal:\s+https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]):(\d{1,5})\b/i);
       if (local && Number(local[1]) >= 1 && Number(local[1]) <= 65535) return Number(local[1]);
 
-      const started = line.match(/\bserver\s+started\s+on\s+(?:port\s*)?:?(\d{1,5})\b/i);
+      const started = line.match(
+        /\bserver\s+started\s+on\s+(?:(?:https?:\/\/)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):|port\s*:?\s*|:)?(\d{1,5})(?![\d.:-])\/?[.!?]?\s*$/i
+      );
       if (started && Number(started[1]) >= 1 && Number(started[1]) <= 65535) return Number(started[1]);
 
       if (!/\b(?:listening|ready|running)\b/i.test(line)) continue;
@@ -434,13 +436,22 @@ function createProcessManager({
               clearInterval(readinessProbe);
               return;
             }
-            const port = detectedPort || project.port;
-            if (!Number.isInteger(port) || port < 1 || port > 65535 || probing) return;
+            const candidatePorts = [...new Set([detectedPort, project.port])].filter(
+              (port) => Number.isInteger(port) && port >= 1 && port <= 65535
+            );
+            if (candidatePorts.length === 0 || probing) return;
             probing = true;
             try {
-              const reachable = await (checkPort || isPortInUse)(port);
+              let responsivePort = null;
+              for (const port of candidatePorts) {
+                if (recordFor(id).process !== proc || proc.exitCode !== null || killedProcesses.has(proc)) return;
+                if (await (checkPort || isPortInUse)(port)) {
+                  responsivePort = port;
+                  break;
+                }
+              }
               if (
-                reachable &&
+                responsivePort !== null &&
                 recordFor(id).process === proc &&
                 proc.exitCode === null &&
                 !killedProcesses.has(proc) &&
@@ -449,22 +460,23 @@ function createProcessManager({
                 isRunning = true;
                 restartPolicy.reset(id);
                 setStatus(id, 'running', win);
-                portSink?.(id, port);
-                win?.webContents.send('project-port', { id, port });
+                portSink?.(id, responsivePort);
+                win?.webContents.send('project-port', { id, port: responsivePort });
                 clearInterval(readinessProbe);
               } else if (
-                !reachable &&
+                responsivePort === null &&
                 recordFor(id).process === proc &&
                 proc.exitCode === null &&
                 !killedProcesses.has(proc)
               ) {
-                if (lastWaitingPort !== port) {
-                  lastWaitingPort = port;
-                  setStatus(id, 'booting', win, port);
+                const waitingPort = detectedPort || project.port;
+                if (lastWaitingPort !== waitingPort) {
+                  lastWaitingPort = waitingPort;
+                  setStatus(id, 'booting', win, waitingPort);
                 }
                 if (!warnedUnready && now() - launchedAt >= 10000) {
                   warnedUnready = true;
-                  emitLog(win, id, 'warn', pmMsg('waitingForPort', port));
+                  emitLog(win, id, 'warn', pmMsg('waitingForPort', waitingPort));
                 }
               }
             } finally {

@@ -30,6 +30,60 @@ function waitForStatus(manager, id, expected, timeoutMs = 1500) {
     }, 20);
   });
 }
+test('a real server announces an IPv4 host on a different reachable TCP port', { timeout: 15000 }, async (t) => {
+  const server = require('node:http').createServer((_req, res) => res.end('IPV4_OK'));
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => server.close());
+  const port = server.address().port;
+  const child = fakeChild();
+  const manager = createProcessManager({ spawnProcess: () => child });
+  t.after(() => {
+    child.exitCode = 0;
+    child.emit('close', 0);
+  });
+  const configuredPort = await manager.findFreePort(port + 1);
+  const confirmed = [];
+  manager.setPortSink((_id, value) => confirmed.push(value));
+  const project = {
+    id: 'ipv4',
+    name: 'IPv4',
+    path: os.tmpdir(),
+    port: configuredPort,
+    customCommand: 'node server.js'
+  };
+  manager.startProject(project.id, project);
+  child.stdout.emit('data', Buffer.from(`Server started on 127.0.0.1:${port}\n`));
+  await waitForStatus(manager, project.id, 'running', 8000);
+  assert.deepEqual(confirmed, [port]);
+  assert.equal(await (await fetch(`http://127.0.0.1:${port}/`)).text(), 'IPV4_OK');
+});
+
+test('readiness falls back to the configured port when an announced port is unreachable', async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ldm-port-fallback-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const child = fakeChild();
+  const checked = [];
+  const confirmed = [];
+  const manager = createProcessManager({
+    spawnProcess: () => child,
+    checkPort: async (port) => {
+      checked.push(port);
+      return port === 4901;
+    }
+  });
+  manager.setPortSink((_id, port) => confirmed.push(port));
+  t.after(() => {
+    child.exitCode = 0;
+    child.emit('close', 0);
+  });
+  const project = { id: 'fallback', name: 'Fallback', path: directory, port: 4901, customCommand: 'node server.js' };
+  manager.startProject(project.id, project);
+  child.stdout.emit('data', Buffer.from('Server started on 4902\n'));
+  await waitForStatus(manager, project.id, 'running');
+  assert.ok(checked.includes(4902));
+  assert.ok(checked.includes(4901));
+  assert.deepEqual(confirmed, [4901]);
+});
 
 test('forgetProject reports failed stop without clearing the live process state', (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ldm-forget-failure-'));
