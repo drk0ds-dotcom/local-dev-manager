@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { EventEmitter } = require('node:events');
+const { spawn, execFile } = require('node:child_process');
 
 const { createProcessManager } = require('../processManager');
 
@@ -29,6 +30,93 @@ function waitForStatus(manager, id, expected, timeoutMs = 1500) {
     }, 20);
   });
 }
+test('a real server announces an IPv4 host on a different reachable TCP port', { timeout: 15000 }, async (t) => {
+  const server = require('node:http').createServer((_req, res) => res.end('IPV4_OK'));
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => server.close());
+  const port = server.address().port;
+  const child = fakeChild();
+  const manager = createProcessManager({ spawnProcess: () => child });
+  t.after(() => {
+    child.exitCode = 0;
+    child.emit('close', 0);
+  });
+  const configuredPort = await manager.findFreePort(port + 1);
+  const confirmed = [];
+  manager.setPortSink((_id, value) => confirmed.push(value));
+  const project = {
+    id: 'ipv4',
+    name: 'IPv4',
+    path: os.tmpdir(),
+    port: configuredPort,
+    customCommand: 'node server.js'
+  };
+  manager.startProject(project.id, project);
+  child.stdout.emit('data', Buffer.from(`Server started on 127.0.0.1:${port}\n`));
+  await waitForStatus(manager, project.id, 'running', 8000);
+  assert.deepEqual(confirmed, [port]);
+  assert.equal(await (await fetch(`http://127.0.0.1:${port}/`)).text(), 'IPV4_OK');
+});
+
+test('readiness falls back to the configured port when an announced port is unreachable', async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ldm-port-fallback-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const child = fakeChild();
+  const checked = [];
+  const confirmed = [];
+  const manager = createProcessManager({
+    spawnProcess: () => child,
+    checkPort: async (port) => {
+      checked.push(port);
+      return port === 4901;
+    }
+  });
+  manager.setPortSink((_id, port) => confirmed.push(port));
+  t.after(() => {
+    child.exitCode = 0;
+    child.emit('close', 0);
+  });
+  const project = { id: 'fallback', name: 'Fallback', path: directory, port: 4901, customCommand: 'node server.js' };
+  manager.startProject(project.id, project);
+  child.stdout.emit('data', Buffer.from('Server started on 4902\n'));
+  await waitForStatus(manager, project.id, 'running');
+  assert.ok(checked.includes(4902));
+  assert.ok(checked.includes(4901));
+  assert.deepEqual(confirmed, [4901]);
+});
+
+test('forgetProject reports failed stop without clearing the live process state', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ldm-forget-failure-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const child = fakeChild();
+  child.pid = 44001;
+  child.kill = () => false;
+  const timers = [];
+  const manager = createProcessManager({
+    spawnProcess: () => child,
+    killProcessTree: (_proc, done) => done(new Error('taskkill exited 1')),
+    scheduleTimeout: (callback, delay) => {
+      const timer = { callback, delay };
+      timers.push(timer);
+      return timer;
+    },
+    clearScheduledTimeout: () => {}
+  });
+  const project = { id: 'worker', name: 'Worker', path: directory, port: null, customCommand: 'node worker.js' };
+  manager.startProject('worker', project);
+  child.emit('spawn');
+  let stopped;
+  manager.forgetProject('worker', project, null, (result) => {
+    stopped = result;
+  });
+  assert.equal(manager.getStatus('worker'), 'stopping');
+  timers.find((timer) => timer.delay === 3000).callback();
+  assert.equal(stopped, false);
+  assert.equal(manager.getStatus('worker'), 'stop-failed');
+  assert.equal(manager.hasRunningProcesses(), true);
+  child.exitCode = 0;
+  child.emit('close', 0);
+});
 
 test('a portless custom child starts without npm and is running only while alive', async (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ldm-custom-worker-'));
@@ -81,6 +169,103 @@ test('a custom project with a port waits for socket readiness', async (t) => {
   child.exitCode = 0;
   child.emit('close', 0);
   assert.equal(manager.getStatus('server'), 'stopped');
+});
+
+test('a custom server that announces a different listening port uses the reachable port', async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ldm-custom-moved-port-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const checked = [];
+  const child = fakeChild();
+  const manager = createProcessManager({
+    spawnProcess: () => child,
+    checkPort: async (port) => {
+      checked.push(port);
+      return port === 4902;
+    },
+    killProcessTree: (_child, done) => done?.()
+  });
+  t.after(() => manager.stopAllProjects());
+
+  manager.startProject('server', {
+    id: 'server',
+    name: 'Server',
+    path: directory,
+    port: 4901,
+    customCommand: 'node server.js'
+  });
+  child.stdout.emit('data', Buffer.from('Server started on 4902\n'));
+  await waitForStatus(manager, 'server', 'running');
+  assert.ok(checked.includes(4902));
+  child.exitCode = 0;
+  child.emit('close', 0);
+});
+
+test('an unresponsive configured port stays booting and reports why', async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ldm-custom-unready-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const child = fakeChild();
+  const logs = [];
+  let clock = 0;
+  const manager = createProcessManager({
+    spawnProcess: () => child,
+    checkPort: async () => false,
+    now: () => clock,
+    killProcessTree: (_child, done) => done?.()
+  });
+  manager.setLogSink((_id, type, message) => logs.push({ type, message }));
+  t.after(() => manager.stopAllProjects());
+
+  manager.startProject('server', {
+    id: 'server',
+    name: 'Server',
+    path: directory,
+    port: 4901,
+    customCommand: 'node server.js'
+  });
+  clock = 10001;
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  assert.equal(manager.getStatus('server'), 'booting');
+  assert.ok(logs.some(({ type, message }) => type === 'warn' && /4901/.test(message)));
+  child.exitCode = 0;
+  child.emit('close', 0);
+});
+
+test('waiting-port badge follows the current port and clears only after TCP responds', async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ldm-waiting-port-badge-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const child = fakeChild();
+  const statuses = [];
+  let ready = false;
+  const win = {
+    webContents: {
+      send: (channel, data) => {
+        if (channel === 'project-status') statuses.push(data);
+      }
+    }
+  };
+  const manager = createProcessManager({
+    spawnProcess: () => child,
+    checkPort: async (port) => ready && port === 4902,
+    killProcessTree: (_child, done) => done?.()
+  });
+  t.after(() => manager.stopAllProjects());
+  const project = { id: 'server', name: 'Server', path: directory, port: 4901, customCommand: 'node server.js' };
+
+  manager.startProject('server', project, win);
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  assert.equal(manager.getStatus('server'), 'booting');
+  assert.equal(statuses.at(-1).badgeText.en, 'Waiting for port 4901');
+
+  child.stdout.emit('data', Buffer.from('Server started on 4902\n'));
+  await new Promise((resolve) => setTimeout(resolve, 450));
+  assert.equal(statuses.at(-1).badgeText.ar, 'بانتظار المنفذ 4902');
+
+  ready = true;
+  await waitForStatus(manager, 'server', 'running');
+  assert.equal(statuses.at(-1).status, 'running');
+  assert.equal(statuses.at(-1).badgeText, undefined);
+  child.exitCode = 0;
+  child.emit('close', 0);
 });
 
 test('Stop cancels a portless custom crash restart even after a quick exit', async (t) => {
@@ -151,8 +336,8 @@ test('a portless custom restart waits for close before launching one replacement
       return child;
     },
     killProcessTree: () => {},
-    scheduleTimeout: (callback) => {
-      const timer = { callback };
+    scheduleTimeout: (callback, delay) => {
+      const timer = { callback, delay };
       timers.push(timer);
       return timer;
     }
@@ -165,8 +350,8 @@ test('a portless custom restart waits for close before launching one replacement
   assert.equal(children.length, 1);
   children[0].exitCode = 0;
   children[0].emit('close', 0);
-  assert.equal(timers.length, 1);
-  timers[0].callback();
+  assert.equal(timers.filter((timer) => timer.delay === 300).length, 1);
+  timers.find((timer) => timer.delay === 300).callback();
   assert.equal(children.length, 2);
   children[1].emit('spawn');
   assert.equal(manager.getStatus('worker'), 'running');
@@ -188,7 +373,10 @@ test('two process managers keep the same project id in separate states', async (
   }
   const options = {
     spawnProcess: fakeProcess,
-    killProcessTree: (child, done) => done()
+    killProcessTree: (child, done) => {
+      child.emit('close', 0);
+      done();
+    }
   };
   const first = createProcessManager(options);
   const second = createProcessManager(options);
@@ -202,7 +390,7 @@ test('two process managers keep the same project id in separate states', async (
   assert.equal(second.getStatus('shared'), 'stopped');
 });
 
-test('stopping and crash backoff are internal phases with unchanged UI statuses', (t) => {
+test('Stopping remains visible until the child closes; crash backoff stays booting', (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'local-dev-manager-phases-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   fs.mkdirSync(path.join(directory, 'node_modules'));
@@ -223,7 +411,7 @@ test('stopping and crash backoff are internal phases with unchanged UI statuses'
     },
     checkPort: async () => false,
     killProcessTree: () => {},
-    scheduleTimeout: (callback) => ({ callback }),
+    scheduleTimeout: (callback, delay) => ({ callback, delay }),
     clearScheduledTimeout: (timer) => canceled.push(timer)
   });
   const project = { id: 'shared', name: 'shared', path: directory, port: 3000, script: 'dev', autoRestart: true };
@@ -232,9 +420,10 @@ test('stopping and crash backoff are internal phases with unchanged UI statuses'
   assert.equal(manager.getPhase('shared'), 'booting');
   manager.stopProject('shared', project);
   assert.equal(manager.getPhase('shared'), 'stopping');
-  assert.equal(manager.getStatus('shared'), 'stopped');
+  assert.equal(manager.getStatus('shared'), 'stopping');
   children[0].emit('close', 0);
   assert.equal(manager.getPhase('shared'), 'stopped');
+  assert.equal(manager.getStatus('shared'), 'stopped');
 
   manager.startProject('shared', project);
   children[1].emit('close', 1);
@@ -242,7 +431,186 @@ test('stopping and crash backoff are internal phases with unchanged UI statuses'
   assert.equal(manager.getStatus('shared'), 'booting');
   manager.stopProject('shared', project);
   assert.equal(manager.getPhase('shared'), 'stopped');
-  assert.equal(canceled.length, 1);
+  assert.equal(canceled.filter((timer) => timer.delay !== 3000).length, 1);
+});
+
+test('failed tree kill falls back to SIGKILL, times out visibly, and Stop can retry', async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ldm-stop-failure-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const child = fakeChild();
+  child.pid = 43210;
+  let signals = 0;
+  child.kill = (signal) => {
+    assert.equal(signal, 'SIGKILL');
+    signals++;
+    return true;
+  };
+  const timers = [];
+  let killAttempts = 0;
+  const logs = [];
+  const manager = createProcessManager({
+    spawnProcess: () => child,
+    killProcessTree: (_proc, done) => {
+      killAttempts++;
+      done(new Error('taskkill exited 1'));
+    },
+    scheduleTimeout: (callback, delay) => {
+      const timer = { callback, delay, canceled: false };
+      timers.push(timer);
+      return timer;
+    },
+    clearScheduledTimeout: (timer) => {
+      timer.canceled = true;
+    }
+  });
+  manager.setLogSink((id, type, message) => logs.push({ id, type, message }));
+  const project = {
+    id: 'worker',
+    name: 'Worker',
+    path: directory,
+    port: null,
+    customCommand: 'node worker.js',
+    autoRestart: true
+  };
+  manager.startProject('worker', project);
+  child.emit('spawn');
+
+  manager.stopProject('worker', project);
+  assert.equal(killAttempts, 1);
+  assert.equal(signals, 1);
+  assert.equal(manager.getStatus('worker'), 'stopping');
+  const timeout = timers.find((timer) => timer.delay >= 1000);
+  assert.ok(timeout);
+  timeout.callback();
+  assert.equal(manager.getStatus('worker'), 'stop-failed');
+  assert.ok(logs.some(({ type, message }) => type === 'error' && message.includes('43210')));
+
+  manager.stopProject('worker', project);
+  assert.equal(killAttempts, 2);
+  assert.equal(signals, 2);
+  assert.equal(manager.getStatus('worker'), 'stopping');
+  child.exitCode = 1;
+  child.emit('close', 1);
+  assert.equal(manager.getStatus('worker'), 'stopped');
+  assert.equal(logs.filter(({ message }) => /auto-restart/i.test(message)).length, 0);
+});
+
+test('Quit is bounded and reports a child that did not exit', async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ldm-quit-failure-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const child = fakeChild();
+  child.pid = 43211;
+  child.kill = () => true;
+  const timers = [];
+  const logs = [];
+  const manager = createProcessManager({
+    spawnProcess: () => child,
+    killProcessTree: (_proc, done) => done(new Error('taskkill exited 1')),
+    scheduleTimeout: (callback, delay) => {
+      const timer = { callback, delay };
+      timers.push(timer);
+      return timer;
+    },
+    clearScheduledTimeout: () => {}
+  });
+  manager.setLogSink((id, type, message) => logs.push({ id, type, message }));
+  manager.startProject('worker', {
+    id: 'worker',
+    name: 'Worker',
+    path: directory,
+    port: null,
+    customCommand: 'node worker.js'
+  });
+
+  const shutdown = manager.stopAllProjects();
+  assert.equal(manager.getStatus('worker'), 'stopping');
+  timers.find((timer) => timer.delay >= 1000).callback();
+  const result = await shutdown;
+  assert.equal(manager.getStatus('worker'), 'stop-failed');
+  assert.equal(manager.hasRunningProcesses(), true);
+  assert.deepEqual(result, [43211]);
+  assert.ok(logs.some(({ id, type, message }) => id === '__system__' && type === 'error' && message.includes('43211')));
+});
+
+test('Quit during an in-flight Stop still resolves and reports a live child', async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ldm-quit-while-stopping-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const child = fakeChild();
+  child.pid = 43212;
+  const timers = [];
+  const logs = [];
+  const manager = createProcessManager({
+    spawnProcess: () => child,
+    killProcessTree: () => {},
+    scheduleTimeout: (callback, delay) => {
+      const timer = { callback, delay };
+      timers.push(timer);
+      return timer;
+    },
+    clearScheduledTimeout: () => {}
+  });
+  manager.setLogSink((id, type, message) => logs.push({ id, type, message }));
+  const project = { id: 'worker', name: 'Worker', path: directory, port: null, customCommand: 'node worker.js' };
+  manager.startProject('worker', project);
+  manager.stopProject('worker', project);
+  const shutdown = manager.stopAllProjects();
+  for (const timer of timers.filter((item) => item.delay === 3000)) timer.callback();
+  assert.equal(manager.getStatus('worker'), 'stop-failed');
+  assert.ok(logs.some(({ id }) => id === '__system__'));
+  assert.deepEqual(await shutdown, [43212]);
+});
+
+test('a synchronous kill failure still leaves Stop bounded and reports its PID', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ldm-kill-throws-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const child = fakeChild();
+  child.pid = 43213;
+  child.kill = () => false;
+  const timers = [];
+  const manager = createProcessManager({
+    spawnProcess: () => child,
+    killProcessTree: () => {
+      throw new Error('failed to launch taskkill');
+    },
+    scheduleTimeout: (callback, delay) => {
+      timers.push({ callback, delay });
+      return { callback, delay };
+    }
+  });
+  const project = { id: 'worker', name: 'Worker', path: directory, port: null, customCommand: 'node worker.js' };
+  manager.startProject('worker', project);
+  assert.doesNotThrow(() => manager.stopProject('worker', project));
+  timers.find((timer) => timer.delay === 3000).callback();
+  assert.equal(manager.getStatus('worker'), 'stop-failed');
+});
+
+test('Windows falls back to SIGKILL after a failing kill script', { skip: process.platform !== 'win32' }, async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ldm-real-stop-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  let child;
+  let fallbackSignals = 0;
+  const manager = createProcessManager({
+    spawnProcess: () => {
+      child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { windowsHide: true });
+      const nativeKill = child.kill.bind(child);
+      child.kill = (signal) => {
+        if (signal === 'SIGKILL') fallbackSignals++;
+        return nativeKill(signal);
+      };
+      return child;
+    },
+    killProcessTree: (_proc, done) => execFile(process.execPath, ['-e', 'process.exit(7)'], { windowsHide: true }, done)
+  });
+  t.after(() => {
+    if (child?.exitCode === null) child.kill('SIGKILL');
+  });
+  const project = { id: 'worker', name: 'Worker', path: directory, port: null, customCommand: 'node worker.js' };
+  manager.startProject('worker', project);
+  await waitForStatus(manager, 'worker', 'running');
+  manager.stopProject('worker', project);
+  assert.equal(manager.getStatus('worker'), 'stopping');
+  await waitForStatus(manager, 'worker', 'stopped', 5000);
+  assert.equal(fallbackSignals, 1);
 });
 
 test('manual Start during backoff creates one child and invalidates the old timer', (t) => {

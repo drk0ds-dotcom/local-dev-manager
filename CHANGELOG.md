@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.1 — 2026-10-31
+
+- Keep the project in `Stopping` until its process actually closes. If termination fails, show `Stop failed` with the PID, permit Stop to be retried, and keep app shutdown bounded without claiming a live process was stopped.
+- Confirm a listening port before showing `Running`; detect `Server started on PORT` output and explain when a live process has not opened its configured port.
+- Protect the complete project list when one saved entry has an invalid command or missing path: preserve the original file, create a `.corrupt-*` copy, and name the affected project. Show an error dialog when Add Project is unavailable in read-only mode.
+- Run the eight previously conditional Go, Python, pnpm, Yarn, and Bun integration tests on Windows with temporary isolated tools. Local source verification: 156 tests passed, none failed or skipped; lint and formatting checks passed. The owner reported that the installer preserved the saved project and command during a Windows Sandbox upgrade on 2026-10-10; saved screenshots cover only part of that session.
+- Split Windows CI into fast checks and a full integration job that provisions Go, Python, pnpm, Yarn, and Bun and fails if any test is skipped. Both jobs passed in [GitHub Actions run 41153336293](https://github.com/drk0ds-dotcom/local-dev-manager/actions/runs/41153336293) on 2026-10-31; integration recorded 156 passed and 0 skipped.
+
 ## 1.0.0 — revised Windows installer (2026-10-04)
 
 - Add trusted custom commands for local projects without requiring `package.json` or a Node.js package manager. A port is optional for background workers; a configured server port is verified before showing Running.

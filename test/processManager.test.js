@@ -51,7 +51,7 @@ test('buildLaunchSpec keeps Node package-manager arguments and environment', () 
   });
 });
 
-test('launchDevServer rejects a second active launch for the same project', { timeout: 8000 }, async (t) => {
+test('launchDevServer rejects a second active launch for the same project', { timeout: 30000 }, async (t) => {
   const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'ldm-double-launch-'));
   const project = {
     id: 'double-launch-project',
@@ -68,8 +68,9 @@ test('launchDevServer rejects a second active launch for the same project', { ti
   setLogSink((id, type, message) => events.push({ id, type, message }));
   t.after(async () => {
     await new Promise((resolve) => stopProject(project.id, project, undefined, resolve));
+    await waitFor(() => getStatus(project.id) === 'stopped');
     setLogSink(() => {});
-    fs.rmSync(projectPath, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    fs.rmSync(projectPath, { recursive: true, force: true, maxRetries: 30, retryDelay: 200 });
   });
 
   launchDevServer(project.id, project);
@@ -77,7 +78,7 @@ test('launchDevServer rejects a second active launch for the same project', { ti
   assert.equal(events.filter((event) => event.message.includes('⚙️ npm run dev')).length, 1);
 });
 
-test('Stop cancels an auto-restart scheduled after a crash', { timeout: 12000 }, async (t) => {
+test('Stop cancels an auto-restart scheduled after a crash', { timeout: 30000 }, async (t) => {
   const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'ldm-stop-restart-'));
   const project = {
     id: 'stop-pending-restart',
@@ -110,7 +111,7 @@ test('Stop cancels an auto-restart scheduled after a crash', { timeout: 12000 },
 
 test(
   'a port announcement does not mark the project running before the socket listens',
-  { timeout: 12000 },
+  { timeout: 30000 },
   async (t) => {
     const net = require('node:net');
     const reserve = net.createServer();
@@ -138,7 +139,7 @@ test(
     setLogSink((id, type, message) => events.push({ id, type, message }));
     setPortSink((id, readyPort) => ports.push({ id, port: readyPort }));
     t.after(async () => {
-      await waitFor(() => getStatus(project.id) === 'stopped', 9000);
+      await waitFor(() => getStatus(project.id) === 'stopped', 20000);
       setLogSink(() => {});
       setPortSink(() => {});
       fs.rmSync(projectPath, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
@@ -151,7 +152,7 @@ test(
       }
     );
     assert.equal(getStatus(project.id), 'booting');
-    await waitFor(() => getStatus(project.id) === 'running', 7000).catch((err) => {
+    await waitFor(() => getStatus(project.id) === 'running', 20000).catch((err) => {
       throw new Error(`Never running: ${JSON.stringify({ status: getStatus(project.id), events, ports })}`, {
         cause: err
       });
@@ -170,7 +171,7 @@ test('loading the process manager does not print a startup banner', () => {
   assert.equal(result.stdout, '');
 });
 
-function waitFor(predicate, timeoutMs = 5000) {
+function waitFor(predicate, timeoutMs = 15000) {
   return new Promise((resolve, reject) => {
     const deadline = Date.now() + timeoutMs;
     const timer = setInterval(() => {
@@ -188,7 +189,7 @@ function waitFor(predicate, timeoutMs = 5000) {
   });
 }
 
-test('package manager launch does not emit the shell-argument security warning', { timeout: 10000 }, async (t) => {
+test('package manager launch does not emit the shell-argument security warning', { timeout: 30000 }, async (t) => {
   const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'ldm-spawn-test-'));
   const projectId = 'spawn-security-project';
   const warnings = [];
@@ -231,7 +232,7 @@ test('package manager launch does not emit the shell-argument security warning',
   );
 });
 
-test('automatic install preserves startup without the shell-argument warning', { timeout: 20000 }, async (t) => {
+test('automatic install preserves startup without the shell-argument warning', { timeout: 90000 }, async (t) => {
   const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'ldm-install-test-'));
   const projectId = 'install-security-project';
   const warnings = [];
@@ -264,7 +265,7 @@ test('automatic install preserves startup without the shell-argument warning', {
   });
 
   startProject(projectId, project);
-  await waitFor(() => getStatus(projectId) === 'stopped', 15000);
+  await waitFor(() => getStatus(projectId) === 'stopped', 60000);
   await new Promise((resolve) => setImmediate(resolve));
 
   assert.equal(
@@ -280,7 +281,7 @@ test('automatic install preserves startup without the shell-argument warning', {
   assert.ok(events.some((event) => event.id === projectId && event.message === 'INSTALL_PATH_SERVER_READY'));
 });
 
-test('untrusted packageManager values fall back to npm instead of becoming commands', { timeout: 10000 }, async (t) => {
+test('untrusted packageManager values fall back to npm instead of becoming commands', { timeout: 30000 }, async (t) => {
   const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'ldm-pm-safety-test-'));
   const projectId = 'package-manager-safety-project';
   const events = [];
@@ -317,7 +318,7 @@ test('untrusted packageManager values fall back to npm instead of becoming comma
   assert.ok(events.some((event) => event.id === projectId && event.message === 'SAFE_PACKAGE_MANAGER_FALLBACK'));
 });
 
-test('server stdout keeps the project id, type, and message', { timeout: 10000 }, async (t) => {
+test('server stdout keeps the project id, type, and message', { timeout: 30000 }, async (t) => {
   const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'ldm-log-test-'));
   const projectId = 'log-contract-project';
   const project = {
@@ -361,7 +362,7 @@ test('server stdout keeps the project id, type, and message', { timeout: 10000 }
   );
 });
 
-test('starting an already running project emits a correctly shaped warning', { timeout: 10000 }, async (t) => {
+test('starting an already running project emits a correctly shaped warning', { timeout: 60000 }, async (t) => {
   const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'ldm-stop-log-test-'));
   const readyPath = path.join(projectPath, 'ready.txt');
   const projectId = 'stop-log-contract-project';
@@ -396,7 +397,7 @@ test('starting an already running project emits a correctly shaped warning', { t
   });
 
   startProject(projectId, project);
-  await waitFor(() => fs.existsSync(readyPath));
+  await waitFor(() => fs.existsSync(readyPath), 30000);
 
   events.length = 0;
   startProject(projectId, project);

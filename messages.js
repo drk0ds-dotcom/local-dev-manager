@@ -21,6 +21,7 @@ const APP_MESSAGES = {
     portBusy: (port) => `❌ Port ${port} is in use by another process — change the port or free it first`,
     stdinNotRunning: '⚠️ Project is not running — input was not sent',
     chooseFolder: 'Choose project folder',
+    addProjectTitle: 'Cannot add project',
     exportLogsTitle: 'Export logs',
     trayShow: 'Show window',
     trayStopAll: 'Stop all projects',
@@ -42,8 +43,8 @@ const APP_MESSAGES = {
     projectsSaveFailed: (error) =>
       `Your previous project list is unchanged. Check disk access and try again.\n\n${error}`,
     projectsLoadTitle: 'Project storage needs attention',
-    projectsLoadFailed: (backup, original) =>
-      `The project list could not be read or moved to your profile. Changes are disabled to protect the original file at:\n${original}\n\n${backup ? `A copy was saved at:\n${backup}` : 'No backup was created; copy the original file manually before repairing it.'}`
+    projectsLoadFailed: (backup, original, reason) =>
+      `The project list could not be read or moved to your profile. Changes are disabled to protect the original file at:\n${original}\n\n${reason ? `Reason: ${reason}\n\n` : ''}${backup ? `A copy was saved at:\n${backup}` : 'No backup was created; copy the original file manually before repairing it.'}`
   },
   ar: {
     invalidProjectConfig: 'إعدادات المشروع غير صالحة. اختر المجلد مجددًا عند الحاجة.',
@@ -67,6 +68,7 @@ const APP_MESSAGES = {
     portBusy: (port) => `❌ المنفذ ${port} مشغول بعملية أخرى — غيّره أو حرّره أولًا`,
     stdinNotRunning: '⚠️ المشروع ليس قيد التشغيل — لم يُرسل الإدخال',
     chooseFolder: 'اختر مجلد المشروع',
+    addProjectTitle: 'تعذرت إضافة المشروع',
     exportLogsTitle: 'تصدير السجلات',
     trayShow: 'إظهار النافذة',
     trayStopAll: 'إيقاف كل المشاريع',
@@ -87,8 +89,8 @@ const APP_MESSAGES = {
     projectsSaveTitle: 'تعذر حفظ قائمة المشاريع',
     projectsSaveFailed: (error) => `قائمة المشاريع السابقة لم تتغير. تحقق من القرص ثم أعد المحاولة.\n\n${error}`,
     projectsLoadTitle: 'تحتاج ملفات المشاريع إلى مراجعة',
-    projectsLoadFailed: (backup, original) =>
-      `تعذرت قراءة قائمة المشاريع أو نقلها إلى ملف المستخدم. عُطلت التغييرات لحماية الملف الأصلي في:\n${original}\n\n${backup ? `حُفظت نسخة في:\n${backup}` : 'لم تُنشأ نسخة احتياطية؛ انسخ الملف الأصلي يدويًا قبل إصلاحه.'}`
+    projectsLoadFailed: (backup, original, reason) =>
+      `تعذرت قراءة قائمة المشاريع أو نقلها إلى ملف المستخدم. عُطلت التغييرات لحماية الملف الأصلي في:\n${original}\n\n${reason ? `السبب: ${reason}\n\n` : ''}${backup ? `حُفظت نسخة في:\n${backup}` : 'لم تُنشأ نسخة احتياطية؛ انسخ الملف الأصلي يدويًا قبل إصلاحه.'}`
   }
 };
 
@@ -103,7 +105,13 @@ const PROCESS_MESSAGES = {
     restarting: (name) => `🔄 Restarting "${name}"...`,
     stoppedByUser: (name) => `🔴 Project "${name}" stopped`,
     stoppedUnexpectedly: (code) => `🔴 Project stopped (exit code: ${code})`,
+    stopFailed: (pid) => `❌ Could not stop process (PID ${pid}). Try Stop again.`,
+    stopProcessError: (pid, error) => `❌ Stop error for PID ${pid}: ${error}`,
+    shutdownStopFailed: (pid) => `❌ Quit left process PID ${pid} running.`,
     launchError: (error) => `❌ Failed to start the project: ${error}`,
+    waitingForPort: (port) =>
+      `⚠️ The process is still running, but port ${port} is not responding. Check the command and its PORT setting; the project remains booting.`,
+    waitingForPortBadge: (port) => `Waiting for port ${port}`,
     autoRestarting: (name) => `🔄 Project "${name}" crashed — auto-restarting...`,
     autoRestartGaveUp: (name) => `❌ Project "${name}" keeps crashing — auto-restart disabled`,
     stdinError: (error) => `❌ Project input failed: ${error}`
@@ -119,7 +127,13 @@ const PROCESS_MESSAGES = {
     restarting: (name) => `🔄 جارٍ إعادة تشغيل "${name}"...`,
     stoppedByUser: (name) => `🔴 أُوقف المشروع "${name}"`,
     stoppedUnexpectedly: (code) => `🔴 توقف المشروع (رمز الخروج: ${code})`,
+    stopFailed: (pid) => `❌ تعذّر إيقاف العملية (PID ${pid}). أعد المحاولة بزر إيقاف.`,
+    stopProcessError: (pid, error) => `❌ خطأ إيقاف العملية PID ${pid}: ${error}`,
+    shutdownStopFailed: (pid) => `❌ بقيت العملية PID ${pid} تعمل بعد إنهاء البرنامج.`,
     launchError: (error) => `❌ تعذر تشغيل المشروع: ${error}`,
+    waitingForPort: (port) =>
+      `⚠️ العملية ما زالت تعمل، لكن المنفذ ${port} لا يستجيب. تحقق من الأمر وإعداد PORT؛ سيبقى المشروع في حالة بدء التشغيل.`,
+    waitingForPortBadge: (port) => `بانتظار المنفذ ${port}`,
     autoRestarting: (name) => `🔄 انهار المشروع "${name}" — جارٍ إعادة تشغيله تلقائيًا...`,
     autoRestartGaveUp: (name) => `❌ المشروع "${name}" ينهار باستمرار — عُطلت إعادة التشغيل التلقائية`,
     stdinError: (error) => `❌ تعذر إرسال الإدخال إلى المشروع: ${error}`
@@ -139,4 +153,9 @@ function formatProcessMessage(language, key, ...args) {
   return formatMessage(PROCESS_MESSAGES, language, key, args);
 }
 
-module.exports = { APP_MESSAGES, PROCESS_MESSAGES, formatAppMessage, formatProcessMessage };
+function formatStatusBadge(language, status, waitingPort) {
+  if (status !== 'booting' || !Number.isInteger(waitingPort)) return null;
+  return formatProcessMessage(language, 'waitingForPortBadge', waitingPort);
+}
+
+module.exports = { APP_MESSAGES, PROCESS_MESSAGES, formatAppMessage, formatProcessMessage, formatStatusBadge };

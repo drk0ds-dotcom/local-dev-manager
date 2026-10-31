@@ -149,4 +149,62 @@ test('does not reinterpret an invalid saved custom command as a Node project', (
   assert.equal(registry.isWritable(), false);
   assert.ok(registry.loadIssue());
   assert.ok(JSON.parse(fs.readFileSync(file, 'utf8')).invalid);
+  assert.match(registry.loadIssue().error.message, /invalid/);
+  assert.equal(fs.readFileSync(registry.loadIssue().backupPath, 'utf8'), fs.readFileSync(file, 'utf8'));
+});
+
+test('invalid command identifies the project name rather than its storage key', (t) => {
+  const { userDataDir, appDir } = fixture(t);
+  const file = path.join(userDataDir, 'projects.json');
+  const original = JSON.stringify({
+    'uuid-123': { id: 'uuid-123', name: 'Friendly Worker', path: 'C:\\work\\worker', customCommand: '   ' }
+  });
+  fs.writeFileSync(file, original);
+
+  const registry = createProjectRegistry({ userDataDir, appDir });
+  registry.load();
+
+  assert.equal(registry.isWritable(), false);
+  assert.match(registry.loadIssue().error.message, /Friendly Worker/);
+  assert.equal(fs.readFileSync(file, 'utf8'), original);
+  assert.equal(fs.readFileSync(registry.loadIssue().backupPath, 'utf8'), original);
+});
+
+test('missing path identifies the project name and preserves the source file', (t) => {
+  const { userDataDir, appDir } = fixture(t);
+  const file = path.join(userDataDir, 'projects.json');
+  const original = JSON.stringify({ 'uuid-456': { id: 'uuid-456', name: 'Named Project', port: 3000 } });
+  fs.writeFileSync(file, original);
+
+  const registry = createProjectRegistry({ userDataDir, appDir });
+  registry.load();
+
+  assert.equal(registry.isWritable(), false);
+  assert.match(registry.loadIssue().error.message, /Named Project/);
+  assert.equal(fs.readFileSync(file, 'utf8'), original);
+  assert.equal(fs.readFileSync(registry.loadIssue().backupPath, 'utf8'), original);
+});
+
+test('a project without a path blocks migration and preserves every source entry', (t) => {
+  const { userDataDir, appDir } = fixture(t);
+  const file = path.join(userDataDir, 'projects.json');
+  const original = JSON.stringify({
+    valid: { path: 'C:\\work\\valid', port: 3000 },
+    broken: { id: 'broken', name: 'broken', port: 4000 }
+  });
+  fs.writeFileSync(file, original);
+
+  const registry = createProjectRegistry({ userDataDir, appDir, createId: () => 'generated-id' });
+  registry.load();
+
+  assert.equal(registry.isWritable(), false);
+  assert.deepEqual(registry.snapshot(), {});
+  assert.match(registry.loadIssue().error.message, /broken/);
+  assert.equal(fs.readFileSync(file, 'utf8'), original);
+  assert.equal(fs.readFileSync(registry.loadIssue().backupPath, 'utf8'), original);
+  assert.equal(
+    registry.apply((next) => (next.test = {})),
+    false
+  );
+  assert.equal(fs.readFileSync(file, 'utf8'), original);
 });

@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 
-const { readProjectData, writeProjectData, applyProjectChange } = require('./projectStore');
+const { readProjectData, writeProjectData, applyProjectChange, backupProjectData } = require('./projectStore');
 
 function createProjectRegistry({ userDataDir, appDir, createId = () => crypto.randomUUID(), fileSystem = fs }) {
   let projects = {};
@@ -36,11 +36,14 @@ function createProjectRegistry({ userDataDir, appDir, createId = () => crypto.ra
       let index = 0;
 
       for (const [key, value] of Object.entries(result.projects)) {
-        if (!value || !value.path) continue;
+        const projectLabel = typeof value?.name === 'string' && value.name.trim() ? value.name.trim() : key;
+        if (!value || typeof value !== 'object' || typeof value.path !== 'string' || !value.path.trim()) {
+          throw new Error(`Invalid path in project ${projectLabel}`);
+        }
         const customCommand =
           typeof value.customCommand === 'string' && value.customCommand.trim() ? value.customCommand.trim() : null;
         if (Object.hasOwn(value, 'customCommand') && (!customCommand || customCommand.length > 2048)) {
-          throw new Error(`Invalid custom command in project ${key}`);
+          throw new Error(`Invalid custom command in project ${projectLabel}`);
         }
         const customPort = Number.isInteger(value.port) && value.port >= 1 && value.port <= 65535 ? value.port : null;
         const id = (typeof value.id === 'string' && value.id) || createId();
@@ -70,7 +73,11 @@ function createProjectRegistry({ userDataDir, appDir, createId = () => crypto.ra
     } catch (error) {
       projects = {};
       writable = false;
-      issue = { error, backupPath: null };
+      try {
+        issue = { error, backupPath: backupProjectData(projectsPath, fileSystem) };
+      } catch (backupError) {
+        issue = { error, backupPath: null, backupError };
+      }
     }
     return snapshot();
   }

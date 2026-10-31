@@ -2,6 +2,7 @@ node_modules/
 dist/
 dist-refactor/
 dist-custom-command/
+dist-*/
 out/
 *.log
 

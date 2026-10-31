@@ -50,6 +50,20 @@ test('a corrupt project list is backed up and remains untouched', (t) => {
   assert.equal(result.backupPath, path.join(dir, backup));
 });
 
+test('unchanged corrupt content reuses a backup but changed same-size content gets a new backup', (t) => {
+  const { dir, file } = fixture(t);
+  fs.writeFileSync(file, '{broken A');
+  const first = readProjectData(file);
+  const second = readProjectData(file);
+  assert.equal(second.backupPath, first.backupPath);
+  assert.equal(fs.readdirSync(dir).filter((name) => name.startsWith('projects.json.corrupt-')).length, 1);
+
+  fs.writeFileSync(file, '{broken B');
+  const third = readProjectData(file);
+  assert.notEqual(third.backupPath, first.backupPath);
+  assert.equal(fs.readdirSync(dir).filter((name) => name.startsWith('projects.json.corrupt-')).length, 2);
+  assert.equal(fs.readFileSync(file, 'utf8'), '{broken B');
+});
 test('a missing project list starts empty without creating a file', (t) => {
   const { file } = fixture(t);
   const result = readProjectData(file);

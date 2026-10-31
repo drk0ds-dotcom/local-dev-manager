@@ -4,7 +4,7 @@ const net = require('net');
 const fs = require('fs');
 const path = require('path');
 const { createRestartPolicy } = require('./restartPolicy');
-const { formatProcessMessage } = require('./messages');
+const { formatProcessMessage, formatStatusBadge } = require('./messages');
 
 function buildRunArgs(pm, script, framework, port) {
   const args = ['run', script];
@@ -46,6 +46,7 @@ function createProcessManager({
     options.shell ? nativeSpawn(command, args, options) : spawn(command, args, options),
   checkPort = null,
   killProcessTree = null,
+  now = Date.now,
   scheduleTimeout = setTimeout,
   clearScheduledTimeout = clearTimeout
 } = {}) {
@@ -203,13 +204,20 @@ function createProcessManager({
   // ======================
   // SET STATUS
   // ======================
-  function setStatus(id, status, win) {
+  function setStatus(id, status, win, waitingPort = null) {
     const record = recordFor(id);
     record.phase = status;
-    const displayed = status === 'stopping' ? 'stopped' : status === 'backoff' ? 'booting' : status;
+    const displayed = status === 'backoff' ? 'booting' : status;
     record.status = displayed;
     statusSink?.(id, displayed);
-    win?.webContents.send('project-status', { id, status: displayed });
+    const payload = { id, status: displayed };
+    if (Number.isInteger(waitingPort)) {
+      payload.badgeText = {
+        en: formatStatusBadge('en', displayed, waitingPort),
+        ar: formatStatusBadge('ar', displayed, waitingPort)
+      };
+    }
+    win?.webContents.send('project-status', payload);
   }
 
   // ======================
@@ -225,10 +233,16 @@ function createProcessManager({
       const local = line.match(/\bLocal:\s+https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]):(\d{1,5})\b/i);
       if (local && Number(local[1]) >= 1 && Number(local[1]) <= 65535) return Number(local[1]);
 
+      const started = line.match(
+        /\bserver\s+started\s+on\s+(?:(?:https?:\/\/)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):|port\s*:?\s*|:)?(\d{1,5})(?![\d.:-])\/?[.!?]?\s*$/i
+      );
+      if (started && Number(started[1]) >= 1 && Number(started[1]) <= 65535) return Number(started[1]);
+
       if (!/\b(?:listening|ready|running)\b/i.test(line)) continue;
       const host = line.match(/\b(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]):(\d{1,5})\b/i);
       const port = line.match(/\bport\s*[:=]?\s*(\d{1,5})\b/i);
-      const value = Number((host || port)?.[1]);
+      const bareListening = line.match(/\blistening\s+on\s+:(\d{1,5})\b/i);
+      const value = Number((host || port || bareListening)?.[1]);
       if (value >= 1 && value <= 65535) return value;
     }
     return null;
@@ -265,12 +279,12 @@ function createProcessManager({
       return;
     }
 
-    exec(`taskkill /pid ${proc.pid} /T /F`, { windowsHide: true }, () => {
-      if (proc.exitCode === null) {
+    exec(`taskkill /pid ${proc.pid} /T /F`, { windowsHide: true }, (error) => {
+      if (error && proc.exitCode === null) {
         try {
           proc.kill('SIGKILL');
         } catch {
-          // The process may already have exited after taskkill.
+          // The process may have exited before taskkill returned.
         }
       }
       callback?.();
@@ -336,7 +350,12 @@ function createProcessManager({
           recordFor(id).kind = null;
         }
         const intentional = killedProcesses.delete(installer);
-        if (!current || intentional) return;
+        if (!current) return;
+        if (intentional) {
+          setStatus(id, 'stopped', win);
+          emitLog(win, id, 'log', pmMsg('stoppedByUser', project.name));
+          return;
+        }
 
         if (code !== 0) {
           setStatus(id, 'stopped', win);
@@ -349,6 +368,10 @@ function createProcessManager({
 
       installer.on('error', (err) => {
         const current = recordFor(id).process === installer;
+        if (current && recordFor(id).phase === 'stopping' && installer.exitCode === null) {
+          emitLog(win, id, 'error', pmMsg('stopProcessError', installer.pid, err.message));
+          return;
+        }
         if (current) {
           recordFor(id).process = null;
           recordFor(id).kind = null;
@@ -400,6 +423,9 @@ function createProcessManager({
     let isRunning = false;
     let detectedPort = null;
     let probing = false;
+    const launchedAt = now();
+    let warnedUnready = false;
+    let lastWaitingPort = null;
 
     // Log text does not prove readiness; a successful port connection does.
     const readinessProbe =
@@ -410,12 +436,22 @@ function createProcessManager({
               clearInterval(readinessProbe);
               return;
             }
-            const port = detectedPort || project.port;
-            if (!Number.isInteger(port) || port < 1 || port > 65535 || probing) return;
+            const candidatePorts = [...new Set([detectedPort, project.port])].filter(
+              (port) => Number.isInteger(port) && port >= 1 && port <= 65535
+            );
+            if (candidatePorts.length === 0 || probing) return;
             probing = true;
             try {
+              let responsivePort = null;
+              for (const port of candidatePorts) {
+                if (recordFor(id).process !== proc || proc.exitCode !== null || killedProcesses.has(proc)) return;
+                if (await (checkPort || isPortInUse)(port)) {
+                  responsivePort = port;
+                  break;
+                }
+              }
               if (
-                (await (checkPort || isPortInUse)(port)) &&
+                responsivePort !== null &&
                 recordFor(id).process === proc &&
                 proc.exitCode === null &&
                 !killedProcesses.has(proc) &&
@@ -424,9 +460,24 @@ function createProcessManager({
                 isRunning = true;
                 restartPolicy.reset(id);
                 setStatus(id, 'running', win);
-                portSink?.(id, port);
-                win?.webContents.send('project-port', { id, port });
+                portSink?.(id, responsivePort);
+                win?.webContents.send('project-port', { id, port: responsivePort });
                 clearInterval(readinessProbe);
+              } else if (
+                responsivePort === null &&
+                recordFor(id).process === proc &&
+                proc.exitCode === null &&
+                !killedProcesses.has(proc)
+              ) {
+                const waitingPort = detectedPort || project.port;
+                if (lastWaitingPort !== waitingPort) {
+                  lastWaitingPort = waitingPort;
+                  setStatus(id, 'booting', win, waitingPort);
+                }
+                if (!warnedUnready && now() - launchedAt >= 10000) {
+                  warnedUnready = true;
+                  emitLog(win, id, 'warn', pmMsg('waitingForPort', waitingPort));
+                }
               }
             } finally {
               probing = false;
@@ -507,6 +558,10 @@ function createProcessManager({
     proc.on('error', (err) => {
       clearInterval(readinessProbe);
       const current = recordFor(id).process === proc;
+      if (current && recordFor(id).phase === 'stopping' && proc.exitCode === null) {
+        emitLog(win, id, 'error', pmMsg('stopProcessError', proc.pid, err.message));
+        return;
+      }
       if (current) {
         recordFor(id).process = null;
         recordFor(id).kind = null;
@@ -531,7 +586,7 @@ function createProcessManager({
       emitLog(win, id, 'warn', pmMsg('notRunning', project.name));
       setStatus(id, 'stopped', win);
       restartPolicy.reset(id);
-      onStopped?.();
+      onStopped?.(true);
       return;
     }
 
@@ -540,29 +595,54 @@ function createProcessManager({
     restartPolicy.reset(id);
 
     let finished = false;
+    const timeout = scheduleTimeout(() => {
+      if (finished || recordFor(id).process !== proc) return;
+      finished = true;
+      setStatus(id, 'stop-failed', win);
+      emitLog(win, id, 'error', pmMsg('stopFailed', proc.pid));
+      onStopped?.(false);
+    }, 3000);
     const finish = () => {
       if (finished) return;
       finished = true;
-      onStopped?.();
+      clearScheduledTimeout(timeout);
+      onStopped?.(true);
     };
 
     proc.once('close', finish);
-    (killProcessTree || killTree)(proc);
+    const onKillResult = (error) => {
+      if (!error || recordFor(id).process !== proc || proc.exitCode !== null) return;
+      try {
+        proc.kill('SIGKILL');
+      } catch (killError) {
+        emitLog(win, id, 'error', pmMsg('stopProcessError', proc.pid, killError.message));
+      }
+    };
+    try {
+      (killProcessTree || killTree)(proc, onKillResult);
+    } catch (error) {
+      onKillResult(error);
+    }
   }
 
-  function forgetProject(id, project, win) {
-    const clearState = () => {
+  function forgetProject(id, project, win, onForgot) {
+    const clearState = (stopped) => {
+      if (!stopped) {
+        onForgot?.(false);
+        return;
+      }
       const record = recordFor(id);
       record.phase = 'stopped';
       record.status = 'stopped';
       restartPolicy.reset(id);
+      onForgot?.(true);
     };
     if (recordFor(id).process) {
       stopProject(id, project, win, clearState);
     } else {
       advanceEpoch(id);
       cancelPendingRestart(id);
-      clearState();
+      clearState(true);
     }
   }
 
@@ -573,7 +653,8 @@ function createProcessManager({
     emitLog(win, id, 'log', pmMsg('restarting', project.name));
 
     const expectedEpoch = recordFor(id).generation + 1;
-    stopProject(id, project, win, () => {
+    stopProject(id, project, win, (stopped) => {
+      if (!stopped) return;
       if (recordFor(id).generation !== expectedEpoch) return;
       // Allow the OS a brief interval to release the port after process exit.
       setStatus(id, 'booting', win);
@@ -595,31 +676,31 @@ function createProcessManager({
   }
 
   function stopAllProjects() {
+    const pending = [];
     for (const [id, record] of records) {
-      if (!record.process && !record.restartTimer) continue;
-      advanceEpoch(id);
-      cancelPendingRestart(id);
-      setStatus(id, 'stopped');
-    }
-    const running = [];
-    for (const record of records.values()) {
+      if (!record.process) {
+        if (record.restartTimer) {
+          advanceEpoch(id);
+          cancelPendingRestart(id);
+          setStatus(id, 'stopped');
+        }
+        continue;
+      }
       const proc = record.process;
-      if (!proc) continue;
-      running.push(proc);
-      killedProcesses.add(proc);
-      record.process = null;
-      record.kind = null;
+      pending.push(
+        new Promise((resolve) => {
+          stopProject(id, { name: id }, null, (stopped) => {
+            if (!stopped) {
+              emitLog(null, '__system__', 'error', pmMsg('shutdownStopFailed', proc.pid));
+              resolve(proc.pid);
+              return;
+            }
+            resolve(null);
+          });
+        })
+      );
     }
-
-    return Promise.all(
-      running.map(
-        (proc) =>
-          new Promise((resolve) => {
-            (killProcessTree || killTree)(proc, resolve);
-            scheduleTimeout(resolve, 3000);
-          })
-      )
-    );
+    return Promise.all(pending).then((results) => results.filter((pid) => pid !== null));
   }
 
   function getStatus(id) {

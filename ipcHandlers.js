@@ -87,7 +87,7 @@ function registerIpcHandlers({
     const revision = ++selectionRevision;
     pendingSelection = null;
     if (!registry.isWritable()) {
-      addError('projectsReadOnly');
+      dialog.showErrorBox(msg('projectsLoadTitle'), msg('projectsReadOnly'));
       return;
     }
     const result = await dialog.showOpenDialog(getWindow(), {
@@ -98,7 +98,7 @@ function registerIpcHandlers({
     const folderPath = path.resolve(result.filePaths[0]);
     const projectName = path.basename(folderPath);
     if (duplicateFolder(folderPath)) {
-      addError('alreadyExists', projectName);
+      dialog.showErrorBox(msg('addProjectTitle'), msg('alreadyExists', projectName));
       return;
     }
     const script = readNodeScript(folderPath);
@@ -178,16 +178,18 @@ function registerIpcHandlers({
   on('remove-project', (event, id) => {
     if (!known(id)) return;
     const project = registry.get(id);
-    if (
-      !commit((next) => {
-        delete next[id];
-      })
-    )
-      return;
-    manager.forgetProject(id, project, getWindow());
-    ports.delete(id);
-    logs.remove(id).catch((error) => console.error('Failed to remove project log:', error.message));
-    sendProjects();
+    manager.forgetProject(id, project, getWindow(), (stopped) => {
+      if (!stopped || !known(id)) return;
+      if (
+        !commit((next) => {
+          delete next[id];
+        })
+      )
+        return;
+      ports.delete(id);
+      logs.remove(id).catch((error) => console.error('Failed to remove project log:', error.message));
+      sendProjects();
+    });
   });
 
   on('update-port', (event, payload) => {

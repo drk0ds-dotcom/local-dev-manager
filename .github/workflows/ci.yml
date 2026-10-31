@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 jobs:
-  verify:
+  quick:
     runs-on: windows-latest
     steps:
       - name: Check out source
@@ -20,9 +20,54 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
-      - name: Run tests
-        run: npm test
+      - name: Run fast tests
+        run: npm test -- --test-concurrency=1
       - name: Lint JavaScript
         run: npm run lint
       - name: Check formatting
         run: npm run format:check
+
+  integration:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14.8'
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.1'
+          cache: false
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '11.19.0'
+          run_install: false
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.2'
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Yarn Classic for integration tests
+        shell: pwsh
+        run: npm install --prefix "$env:RUNNER_TEMP\ldm-ci-tools" --no-save yarn@1.22.22
+      - name: Run tests
+        shell: pwsh
+        run: |
+          $env:LDM_GO_EXE = (Get-Command go).Source
+          $env:LDM_PYTHON_EXE = (Get-Command python).Source
+          $env:LDM_PYTHON_FRAMEWORK_TESTS = '1'
+          $env:LDM_PNPM_INTEGRATION = '1'
+          $env:LDM_YARN_BIN_DIR = Join-Path $env:RUNNER_TEMP 'ldm-ci-tools\node_modules\.bin'
+          $env:LDM_BUN_BIN_DIR = Split-Path (Get-Command bun).Source
+          node --test --test-concurrency=1 --test-reporter=tap | node scripts/assert-ci-test-results.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

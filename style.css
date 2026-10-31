@@ -276,6 +276,8 @@ body {
 .project-dot.running  { background: var(--green); box-shadow: 0 0 6px var(--green); }
 .project-dot.stopped  { background: var(--text-muted); }
 .project-dot.booting  { background: var(--amber); animation: pulse 1s infinite; }
+.project-dot.stopping { background: var(--amber); animation: pulse 1s infinite; }
+.project-dot.stop-failed { background: #ff5d5d; }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }
@@ -400,6 +402,18 @@ input:focus-visible {
   background: var(--amber-dim);
   color: var(--amber);
   border-color: rgba(240,160,75,0.25);
+}
+
+.status-badge.stopping {
+  background: var(--amber-dim);
+  color: var(--amber);
+  border-color: rgba(240,160,75,0.25);
+}
+
+.status-badge.stop-failed {
+  background: rgba(255,93,93,0.12);
+  color: #ff5d5d;
+  border-color: rgba(255,93,93,0.3);
 }
 
 .status-dot {

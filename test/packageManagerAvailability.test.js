@@ -26,3 +26,13 @@ test('a missing selected package manager is unavailable', async () => {
   });
   assert.equal(available, false);
 });
+
+test('a slow installed package manager is available before the bounded timeout', { timeout: 10000 }, async () => {
+  const available = await isPackageManagerAvailable('yarn', () => {
+    const child = new EventEmitter();
+    child.kill = () => {};
+    setTimeout(() => child.emit('close', 0), 6000);
+    return child;
+  });
+  assert.equal(available, true);
+});

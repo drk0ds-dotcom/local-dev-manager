@@ -38,7 +38,7 @@ test(
         '}'
       ].join('\n')
     );
-    const port = await manager.findFreePort(46000);
+    const port = await manager.findFreePort(46300);
     const logs = [];
     manager.setLogSink((_id, _type, message) => logs.push(message));
     const project = {
