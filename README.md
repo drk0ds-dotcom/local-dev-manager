@@ -119,7 +119,7 @@ The Windows CI workflow runs dependency installation, tests, ESLint linting, and
 
 - The installer and automated verification target Windows x64. macOS and Linux builds are not verified for v1.0.1.
 - The app UI is English/Arabic. Simplified Chinese is available for this README only.
-- Custom commands are included. Python 3.14 worker, Flask, Uvicorn, HTTP-server, and Go HTTP-server flows were tested locally; Go used a temporary portable runtime rather than a system installation. An existing v1.0.0 installation should update to v1.0.1 only after that release is published.
+- Custom commands are included. Python 3.14 worker, Flask, Uvicorn, HTTP-server, and Go HTTP-server flows were tested locally; Go used a temporary portable runtime rather than a system installation. To upgrade an existing v1.0.0 installation, install the v1.0.1 release over it; saved projects remain in the user profile.
 - Port forwarding depends on the framework or script honoring `--port`, `PORT`, or `VITE_PORT`; a custom script may ignore them.
 - Automatic dependency installation and project scripts run local code from the selected project. Review a project's scripts and dependencies before starting it.
 
