@@ -10,7 +10,7 @@
 
 </div>
 
-![مشروع محلي يعمل داخل Local Dev Manager](docs/images/project-running.png)
+![مشروع محلي يعمل على المنفذ 5055 داخل Windows Sandbox](docs/evidence/v1.0.1/owner-sandbox-port-ip.png)
 
 عندما تعمل على عدة مشاريع محلية، يتيح لك التطبيق تشغيل كل مشروع وإيقافه ومتابعة مخرجاته وإدارة منفذه من واجهة واحدة. يشغّل سكريبت `dev` أو `start` لمشروع Node.js، أو أمرًا مخصصًا موثوقًا لمشروع محلي آخر؛ ليس خدمة استضافة ولا بديلًا عن بيئة التشغيل أو مدير الحزم.
 
@@ -37,21 +37,21 @@
 | مساحة العمل       | البحث والتجميع والترتيب بالسحب، وفتح رابط localhost أو مجلد المشروع أو VS Code.                                                           |
 | سطح المكتب        | واجهة عربية/إنجليزية مع RTL، قائمة صينية النظام، عرض CPU والذاكرة، وفحص تحديثات GitHub Releases في النسخة المثبّتة.                       |
 
-## صور التطبيق
+## صور Windows Sandbox
 
-التُقطت هذه الصور من التطبيق أثناء تشغيل مشاريع تجريبية معزولة، وليست تصاميم تخيلية للواجهة. تظهر صورة المشروع العامل أعلى الصفحة؛ اضغط على أي صورة أدناه لفتحها بحجمها الكامل.
+التُقطت هذه الصور خلال اختبار المالك لمثبّت v1.0.1 المنشور في Windows Sandbox بتاريخ 2026-10-10. تظهر صورة المشروع العامل أعلى الصفحة. اضغط على أي صورة لفتحها بحجمها الكامل، أو راجع [فهرس الأدلة](docs/evidence/v1.0.1/README.md) لمعرفة نسبة الصور وحدود ما تثبته.
 
-| مساحة عمل فارغة                                                                                  | مشروع متوقف                                                                                                  |
-| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| [![مساحة عمل Local Dev Manager فارغة](docs/images/empty-state.png)](docs/images/empty-state.png) | [![مشروع محلي متوقف في Local Dev Manager](docs/images/project-stopped.png)](docs/images/project-stopped.png) |
+| تشغيل على المنفذ المضبوط | انتظار استجابة المنفذ |
+| --- | --- |
+| [![مشروع يعمل على المنفذ المضبوط 5056 بعد إعلان 5099](docs/evidence/v1.0.1/owner-sandbox-port-fallback.png)](docs/evidence/v1.0.1/owner-sandbox-port-fallback.png) | [![مشروع ينتظر المنفذ 5057 مع تحذير](docs/evidence/v1.0.1/owner-sandbox-port-waiting.png)](docs/evidence/v1.0.1/owner-sandbox-port-waiting.png) |
 
-| مشروعان يعملان                                                                                                 | الواجهة العربية                                                                                           |
-| -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| [![مشروعان يعملان في Local Dev Manager](docs/images/multiple-projects.png)](docs/images/multiple-projects.png) | [![واجهة Local Dev Manager بالعربية](docs/images/arabic-interface.png)](docs/images/arabic-interface.png) |
+| تحذير بيانات مشروع غير صالحة | مشروع بعد الإيقاف |
+| --- | --- |
+| [![تحذير يذكر Bad Project ومسار نسخة تالفة محفوظة](docs/evidence/v1.0.1/owner-sandbox-corrupt-second-start.png)](docs/evidence/v1.0.1/owner-sandbox-corrupt-second-start.png) | [![المشروع على المنفذ 5055 في حالة Stopped](docs/evidence/v1.0.1/owner-sandbox-port-ip-stopped.png)](docs/evidence/v1.0.1/owner-sandbox-port-ip-stopped.png) |
 
-### أمر مخصص
+### بصمات المثبّتات داخل Sandbox
 
-[![عامل خلفي يعمل بأمر مخصص في Local Dev Manager](docs/images/custom-command.png)](docs/images/custom-command.png)
+[![بصمتا SHA-256 لمثبّتَي 1.0.0 و1.0.1 داخل Windows Sandbox](docs/evidence/v1.0.1/owner-sandbox-installer-hashes.png)](docs/evidence/v1.0.1/owner-sandbox-installer-hashes.png)
 
 ## طريقة العمل المعتادة
 

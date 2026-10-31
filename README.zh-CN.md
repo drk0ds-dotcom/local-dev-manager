@@ -10,7 +10,7 @@
 
 </div>
 
-![Local Dev Manager 中正在运行的本地项目](docs/images/project-running.png)
+![Windows Sandbox 中在 5055 端口运行的本地项目](docs/evidence/v1.0.1/owner-sandbox-port-ip.png)
 
 如果你同时开发多个本地项目，可以在一个界面中启动、停止、查看输出、管理端口并打开开发服务器。应用运行 Node.js 项目自身的 `dev` 或 `start` 脚本，也可以运行其他本地项目的可信自定义命令；它不是托管服务，也不替代运行环境或包管理器。
 
@@ -37,21 +37,21 @@
 | 工作区       | 搜索、分组、拖动排序，打开本地网址、项目文件夹或 VS Code。                                                                                                                 |
 | 桌面集成     | 英语和阿拉伯语界面及 RTL 布局；系统托盘；运行进程树的 CPU/内存轮询；已打包应用通过 GitHub Releases 检查更新。                                                              |
 
-## 应用截图
+## Windows Sandbox 截图
 
-这些截图取自运行中的应用和隔离的演示项目，并非界面效果图。运行中项目的截图位于页面顶部；点击下方图片可查看原图。
+这些图片来自所有者于 2026-10-10 在 Windows Sandbox 中对已发布 v1.0.1 安装程序的测试。页面顶部展示运行中的项目。点击下方图片可查看原图；图片的归属及证明范围见[证据索引](docs/evidence/v1.0.1/README.md)。
 
-| 空白工作区                                                                                  | 已停止的项目                                                                                            |
-| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| [![Local Dev Manager 空白工作区](docs/images/empty-state.png)](docs/images/empty-state.png) | [![Local Dev Manager 中已停止的项目](docs/images/project-stopped.png)](docs/images/project-stopped.png) |
+| 在配置端口运行 | 等待端口监听 |
+| --- | --- |
+| [![项目宣告 5099 后在配置端口 5056 运行](docs/evidence/v1.0.1/owner-sandbox-port-fallback.png)](docs/evidence/v1.0.1/owner-sandbox-port-fallback.png) | [![项目等待端口 5057 并显示警告](docs/evidence/v1.0.1/owner-sandbox-port-waiting.png)](docs/evidence/v1.0.1/owner-sandbox-port-waiting.png) |
 
-| 两个运行中的项目                                                                                                | 阿拉伯语界面                                                                                            |
-| --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| [![Local Dev Manager 中两个运行中的项目](docs/images/multiple-projects.png)](docs/images/multiple-projects.png) | [![Local Dev Manager 阿拉伯语界面](docs/images/arabic-interface.png)](docs/images/arabic-interface.png) |
+| 无效项目数据警告 | 停止后的项目 |
+| --- | --- |
+| [![警告指出 Bad Project 和保存的损坏副本](docs/evidence/v1.0.1/owner-sandbox-corrupt-second-start.png)](docs/evidence/v1.0.1/owner-sandbox-corrupt-second-start.png) | [![5055 端口的项目显示已停止](docs/evidence/v1.0.1/owner-sandbox-port-ip-stopped.png)](docs/evidence/v1.0.1/owner-sandbox-port-ip-stopped.png) |
 
-### 自定义命令
+### Sandbox 内的安装程序哈希
 
-[![Local Dev Manager 中使用自定义命令运行的后台任务](docs/images/custom-command.png)](docs/images/custom-command.png)
+[![Windows Sandbox 中 1.0.0 与 1.0.1 安装程序的 SHA-256 哈希](docs/evidence/v1.0.1/owner-sandbox-installer-hashes.png)](docs/evidence/v1.0.1/owner-sandbox-installer-hashes.png)
 
 ## 常见流程
 
