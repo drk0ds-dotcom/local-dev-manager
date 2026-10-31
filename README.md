@@ -10,7 +10,7 @@ Run and monitor local Node.js projects and trusted custom commands from one Wind
 
 </div>
 
-![A running local project in Local Dev Manager](docs/images/project-running.png)
+![A local project running on port 5055 in Windows Sandbox](docs/evidence/v1.0.1/owner-sandbox-port-ip.png)
 
 Local Dev Manager is useful when you work on several local projects and want one place to start them, see their output, manage ports, and open their development servers. It runs each Node.js project's own `dev` or `start` script, or a custom command you enter for another local project. It is not a hosting service or a replacement for a project's runtime or package manager.
 
@@ -37,21 +37,21 @@ The app chooses an available port from 3000 when a project is added. It installs
 | Workspace                      | Search projects, arrange them by drag and drop or group name, and open the local URL, project folder, or VS Code.                                                                                                                               |
 | Desktop                        | English and Arabic UI with RTL layout; system tray with show, stop all, and quit; CPU and memory polling for running process trees; packaged-app update checks through GitHub Releases.                                                         |
 
-## Screenshots
+## Windows Sandbox screenshots
 
-These screenshots were captured from the running application with isolated demo projects; they are not interface mockups. The running-project view is shown above; select any image below to open it at full size.
+These images were captured during the owner's 2026-10-10 test of the published v1.0.1 installer in Windows Sandbox. The running-project view is shown above. Select an image below to open it at full size, or see the [evidence index](docs/evidence/v1.0.1/README.md) for attribution and limits.
 
-| Empty workspace                                                                                  | Stopped project                                                                                                   |
-| ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| [![Empty Local Dev Manager workspace](docs/images/empty-state.png)](docs/images/empty-state.png) | [![Stopped local project in Local Dev Manager](docs/images/project-stopped.png)](docs/images/project-stopped.png) |
+| Running on the configured port | Waiting for a listening port |
+| --- | --- |
+| [![Project running on configured port 5056 after announcing 5099](docs/evidence/v1.0.1/owner-sandbox-port-fallback.png)](docs/evidence/v1.0.1/owner-sandbox-port-fallback.png) | [![Project waiting for port 5057 with a warning](docs/evidence/v1.0.1/owner-sandbox-port-waiting.png)](docs/evidence/v1.0.1/owner-sandbox-port-waiting.png) |
 
-| Two running projects                                                                                                 | Arabic interface                                                                                            |
-| -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| [![Two running projects in Local Dev Manager](docs/images/multiple-projects.png)](docs/images/multiple-projects.png) | [![Arabic Local Dev Manager interface](docs/images/arabic-interface.png)](docs/images/arabic-interface.png) |
+| Invalid saved project warning | Project after stopping |
+| --- | --- |
+| [![Warning naming Bad Project and a saved corrupt copy](docs/evidence/v1.0.1/owner-sandbox-corrupt-second-start.png)](docs/evidence/v1.0.1/owner-sandbox-corrupt-second-start.png) | [![Port 5055 project shown stopped](docs/evidence/v1.0.1/owner-sandbox-port-ip-stopped.png)](docs/evidence/v1.0.1/owner-sandbox-port-ip-stopped.png) |
 
-### Custom command
+### Installer hashes inside Sandbox
 
-[![A running background worker using a custom command in Local Dev Manager](docs/images/custom-command.png)](docs/images/custom-command.png)
+[![SHA-256 hashes of the 1.0.0 and 1.0.1 installers inside Windows Sandbox](docs/evidence/v1.0.1/owner-sandbox-installer-hashes.png)](docs/evidence/v1.0.1/owner-sandbox-installer-hashes.png)
 
 ## Typical workflow
 
